@@ -17,6 +17,7 @@ try { storage = window.localStorage; } catch { /* private/blocked storage */ }
 let world = loadWorld(storage);
 let habitat = loadHabitat(storage);
 let activeZone = null;
+let selectedArtifact = null;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
 const container = el('scene');
@@ -219,6 +220,29 @@ function buildHabitatZones(){
   });
 }
 
+
+function buildArtifactGallery(){
+  const local=habitat.artifacts.filter(a=>a.address===world.address).slice(-6);
+  if(!local.length)return;
+  const x0=world.address==='0'?8:0;
+  const z0=world.address==='0'?0:-9;
+  const tints={sculpture:'#c8a2ff',garden:'#78edc0',research:'#91ceff',workshop:'#efbe8d'};
+  for(const [index,artifact] of local.entries()){
+    const angle=index*Math.PI*2/Math.max(local.length,3);
+    const x=x0+Math.cos(angle)*2.6;
+    const z=z0+Math.sin(angle)*2.6;
+    const color=tints[artifact.kind]||'#b8daff';
+    const geometry=artifact.kind==='sculpture'?new THREE.DodecahedronGeometry(.46)
+      :artifact.kind==='garden'?new THREE.IcosahedronGeometry(.48)
+      :artifact.kind==='workshop'?new THREE.BoxGeometry(.72,.72,.72)
+      :new THREE.OctahedronGeometry(.55);
+    const exhibit=new THREE.Mesh(geometry,mat(color,{emissive:color,emissiveIntensity:1.0}));
+    exhibit.position.set(x,2.2,z);
+    register(exhibit,'artifact',artifact.id);districtRoot.add(exhibit);
+    cube(.95,.12,.95,mat('#395371'),x,1.25,z);
+  }
+  label('APPROVED CONCEPTS · '+local.length,x0,6.3,z0,6.1);
+}
 function buildBoard() {
   const canvas=document.createElement('canvas');
   canvas.width=768;canvas.height=384;
@@ -242,7 +266,10 @@ function updateBoard(){
   ctx.fillText('MEMORIES HERE: '+memoriesHere(world).length,32,181);
   ctx.fillText('ORI: '+(world.agents[0].enabled?world.agents[0].activity.toUpperCase():'IDLE'),32,224);
   ctx.font='20px system-ui';ctx.fillText('TRIGGER A PORTAL TO ENTER',32,294);
-  ctx.fillText(activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER',32,326);
+  const detail=selectedArtifact
+    ? 'ARTIFACT '+selectedArtifact.id.toUpperCase()+': '+selectedArtifact.summary.slice(0,28)
+    : (activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER');
+  ctx.fillText(detail,32,326);
   board.texture.needsUpdate=true;
 }
 function clearDistrict() {
@@ -265,7 +292,7 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
-  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildBoard();
+  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildBoard();
   updateUI();
 }
 function toast(message){
@@ -351,7 +378,8 @@ function renderHabitat(){
           reviewProposal(habitat,proposal.id,decision);
           appendEvent(world,'workshop','Proposal '+proposal.id+' '+(decision==='approve'?'published':'declined')+'.');
           persist();persistHabitat();
-          toast(decision==='approve'?'Creation published in local ledger.':'Proposal declined.');
+          if(decision==='approve')rebuild();
+          toast(decision==='approve'?'Creation published as an inspectable 3D concept marker.':'Proposal declined.');
         }catch(error){toast(error.message);}
       });actions.append(b);
     }
@@ -377,6 +405,7 @@ function openZone(id){
   const zone=HABITAT_ZONES.find(z=>z.id===id);
   if(!zone)return;
   activeZone=id;
+  selectedArtifact=null;
   el('zone-description').textContent=zone.label+' · '+zone.description;
   if(world.address!=='0'){
     world.address='0';appendEvent(world,'travel','Visitor returned to the resident district.');
@@ -391,14 +420,21 @@ function openZone(id){
 }
 function goDeeper(index){
   activeZone=null;
+  selectedArtifact=null;
   try{enterPocket(world,index);persist();rebuild();toast('Entered '+world.address+'. Procedural district restored.');}
   catch(error){toast(error.message);}
 }
-function goUp(){activeZone=null;returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
+function goUp(){activeZone=null;selectedArtifact=null;returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
 function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
   if(hit.kind==='zone'){openZone(hit.data);return;}
+  if(hit.kind==='artifact'){
+    selectedArtifact=habitat.artifacts.find(a=>a.id===hit.data)||null;
+    updateBoard();
+    if(selectedArtifact)toast('Approved concept: '+selectedArtifact.summary+' ('+selectedArtifact.source+').');
+    return;
+  }
   if(hit.kind==='agent'){
     toast('Ori is '+(world.agents[0].enabled?world.agents[0].activity:'idle')+'. Set an activity in the resident panel.');
     return;
@@ -603,7 +639,8 @@ el('habitat-file').addEventListener('change',async event=>{
 el('habitat-reset').addEventListener('click',()=>{
   if(!window.confirm('Delete ALL local resident reflections, proposals and published records? Export a private archive first.'))return;
   habitat=makeHabitat();
-  activeZone=null;
+  activeZone=null;selectedArtifact=null;
+  rebuild();
   persistHabitat();
   renderHabitat();updateBoard();
   toast('Local resident habitat reset; District Zero world history preserved.');
