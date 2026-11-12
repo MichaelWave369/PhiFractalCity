@@ -71,3 +71,17 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 @media (max-width:1040px){.layout{grid-template-columns:1fr}.viewport-panel{position:relative;top:auto}.sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.hero-metrics{gap:12px}}
 @media (max-width:640px){#app{padding:0 15px}.topbar{min-height:70px}.hide-mobile,.top-actions .link{display:none}.hero{align-items:start;flex-direction:column;padding:28px 0 20px}.hero-metrics{align-self:stretch;justify-content:space-between}.layout{gap:12px}.sidebar{display:flex}#scene{min-height:400px;height:53vh}.scene-overlay{left:9px;bottom:45px}.controls-hint{padding:8px 11px}.scene-footer{font-size:7px}.panel{padding:17px}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+/* R0.2: agent home, workshop and governed publication */
+.habitat-zones{display:flex;flex-direction:column;gap:8px}
+.zone-tile{text-align:left;width:100%;border:1px solid #374a66;border-radius:9px;background:#141f35;padding:11px 12px;color:#d6e2f7;display:flex;flex-direction:column;gap:4px}
+.zone-tile:hover,.zone-tile.active{border-color:#96bdf6;background:#25304f}
+.zone-tile strong{font-size:12px}
+.zone-tile span{font-size:10px;line-height:1.3;color:#9aaec7}
+.spaced-label{margin-top:13px}
+.panel-subhead{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#a5b5da;margin:19px 0 11px;font-weight:700}
+.proposal-list{display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto}
+.review-row{display:flex;gap:8px;margin-top:10px}
+.review-row .button{padding:9px 7px;font-size:10px}
+#private-export{margin-top:14px}
+#zone-description{margin:10px 0 0}
