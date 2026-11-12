@@ -56,4 +56,5 @@ test('local persistence survives reload and tolerates blocked storage', () => {
   assert.equal(saveWorld(world, storage), true);
   assert.equal(loadWorld(storage).memories[0].text, 'Remember the shared plaza.');
   assert.equal(saveWorld(world, { setItem() { throw new Error('blocked'); } }), false);
+  assert.equal(saveWorld(world, null), false);
 });
