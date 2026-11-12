@@ -93,3 +93,10 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 .model-panel .button:disabled{opacity:.45;cursor:not-allowed}
 #model-state{padding:12px 0 7px;font-size:10px;color:#8bd5cb;overflow-wrap:anywhere}
 .model-reply{padding:15px 12px;background:#091323;border:1px solid #334666;border-radius:9px;color:#d5e3f7;min-height:64px;max-height:180px;overflow:auto;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* R0.4 desktop workbench mirror for experimental Quest spatial UI */
+.placement-pad{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}
+.placement-pad .button{width:100%;min-width:0;padding:11px 3px;font-size:16px}
+#workbench-panel{background:linear-gradient(140deg,#15263c,#111a2c)}
+#workbench-panel .button:disabled{opacity:.38;cursor:not-allowed}
+#workbench-panel .footnote{margin-top:13px}
