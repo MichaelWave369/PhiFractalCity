@@ -10,6 +10,11 @@ import {
   exportHabitat, addPrivateNote, proposeCreation, reviewProposal
 } from './habitat.js';
 import { askLocalModel, makePublicContext, DEFAULT_LOCAL_MODEL } from './inference.js';
+import {
+  makeWorkbench, loadWorkbench, saveWorkbench, parseWorkbench, exportWorkbench,
+  placeConcept, moveConcept, turnConcept, removeConcept
+} from './workbench.js';
+import { createXRConsole } from './xr-console.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -17,6 +22,12 @@ let storage = null;
 try { storage = window.localStorage; } catch { /* private/blocked storage */ }
 let world = loadWorld(storage);
 let habitat = loadHabitat(storage);
+let workbench = loadWorkbench(storage);
+let selectedPlacementId = null;
+let xrTab = 'proposals';
+let xrProposalCursor = 0;
+let xrArtifactCursor = 0;
+let armedReview = null;
 let activeZone = null;
 let selectedArtifact = null;
 let latestModelReply = null;
@@ -32,6 +43,7 @@ const visitorRig = new THREE.Group();
 scene.add(visitorRig);
 visitorRig.add(camera);
 camera.position.set(19, 20, 27);
+const xrConsole = createXRConsole(THREE, visitorRig);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -246,6 +258,31 @@ function buildArtifactGallery(){
   }
   label('APPROVED CONCEPTS · '+local.length,x0,6.3,z0,6.1);
 }
+
+function buildWorkbenchPlacements(){
+  const byArtifact=new Map(habitat.artifacts.map(a=>[a.id,a]));
+  const tints={sculpture:'#d19ff7',garden:'#67dfaf',research:'#85c9f7',workshop:'#f0bd8c'};
+  const display=workbench.placements.filter(p=>p.address===world.address);
+  for(const [i,position] of display.entries()){
+    const art=byArtifact.get(position.artifactId);
+    if(!art)continue; // Unlinked exhibits remain recoverable in layout JSON.
+    const color=tints[art.kind]||'#8bc9e6';
+    let geometry;
+    switch(art.kind){
+      case 'sculpture': geometry=new THREE.DodecahedronGeometry(.95);break;
+      case 'garden': geometry=new THREE.IcosahedronGeometry(.95,1);break;
+      case 'workshop': geometry=new THREE.BoxGeometry(1.65,1.65,1.65);break;
+      default: geometry=new THREE.OctahedronGeometry(.95);break;
+    }
+    const mesh=new THREE.Mesh(geometry,mat(color,{emissive:color,emissiveIntensity:.65,metalness:.1}));
+    mesh.position.set(position.x,2,position.z);
+    mesh.rotation.y=position.yaw*Math.PI/4;
+    register(mesh,'placement',position.id);
+    districtRoot.add(mesh);
+    cube(1.9,.14,1.9,mat('#344e71'),position.x,.98,position.z);
+    if(i<10)label('CONCEPT '+position.id.toUpperCase(),position.x,3.55,position.z,3.5);
+  }
+}
 function buildBoard() {
   const canvas=document.createElement('canvas');
   canvas.width=768;canvas.height=384;
@@ -273,6 +310,8 @@ function updateBoard(){
     ? 'ARTIFACT '+selectedArtifact.id.toUpperCase()+': '+selectedArtifact.summary.slice(0,28)
     : (activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER');
   ctx.fillText(detail,32,326);
+  ctx.fillStyle='#a9c5f1';ctx.font='17px system-ui';
+  ctx.fillText('PLACED CONCEPTS: '+workbench.placements.filter(p=>p.address===world.address).length,32,263);
   if(latestModelReply){
     const clean=latestModelReply.text.replace(/\s+/g,' ').slice(0,64);
     ctx.fillStyle='#b1ecda';ctx.font='18px system-ui';
@@ -300,7 +339,7 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
-  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildBoard();
+  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildWorkbenchPlacements();buildBoard();
   updateUI();
 }
 function toast(message){
@@ -314,7 +353,11 @@ function persist(){
 }
 function persistHabitat(){
   if(!saveHabitat(habitat,storage))toast('Habitat not saved: export a private archive to preserve it.');
-  renderHabitat();updateBoard();
+  renderHabitat();refreshXRConsole();updateBoard();
+}
+function persistWorkbench(){
+  if(!saveWorkbench(workbench,storage))toast('Spatial layout not saved: export JSON to preserve it.');
+  renderWorkbenchUI();refreshXRConsole();updateBoard();
 }
 function updateUI(){
   el('district-name').textContent=generateDistrict(world.address,world.seed).name.toUpperCase();
@@ -339,6 +382,8 @@ function updateUI(){
     grid.append(button);
   }
   renderHabitat();
+  renderWorkbenchUI();
+  refreshXRConsole();
   el('stage-ori-proposal').disabled = !latestModelReply || modelBusy;
   const list=el('memory-list');list.replaceChildren();
   const notes=memoriesHere(world).slice(-8).reverse();
@@ -443,6 +488,14 @@ function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
   if(hit.kind==='zone'){openZone(hit.data);return;}
+  if(hit.kind==='xr-console'){handleXRAction(hit.action,hit.data);return;}
+  if(hit.kind==='placement'){
+    selectedPlacementId=hit.data;
+    renderWorkbenchUI();refreshXRConsole();
+    const chosen=workbench.placements.find(p=>p.id===hit.data);
+    toast(chosen?'Selected spatial concept '+chosen.id+'.':'Spatial concept not found.');
+    return;
+  }
   if(hit.kind==='artifact'){
     selectedArtifact=habitat.artifacts.find(a=>a.id===hit.data)||null;
     updateBoard();
@@ -461,7 +514,9 @@ function interact(hit){
   }
 }
 function pick(ray){
-  const found=ray.intersectObjects(interactives,false);
+  const targets=renderer.xr.isPresenting && xrConsole.isVisible()
+    ? interactives.concat(xrConsole.targets) : interactives;
+  const found=ray.intersectObjects(targets,false);
   return found[0]?.object.userData.interaction||null;
 }
 const pointer={x:0,y:0,dragged:false};
@@ -487,6 +542,12 @@ for(let i=0;i<2;i++){
   );
   controller.add(rayLine);
   visitorRig.add(controller);
+  if(i===0)controller.addEventListener('squeezestart',()=>{
+    if(!renderer.xr.isPresenting)return;
+    const visible=xrConsole.toggle();
+    if(visible)refreshXRConsole();
+    toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
+  });
   controller.addEventListener('selectstart',()=>{
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0,0,-1).transformDirection(controller.matrixWorld);
@@ -498,9 +559,11 @@ renderer.xr.addEventListener('sessionstart',()=>{
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
   camera.position.set(0,0,0);
-  toast('WebXR session started. Point and trigger to interact.');
+  xrConsole.show();refreshXRConsole();
+  toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
+  xrConsole.hide();
   visitorRig.position.set(0,0,0);
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
   orbit.enabled=true;orbit.target.set(0,2,0);orbit.update();
