@@ -526,9 +526,14 @@ function animate(){
     lastStep=performance.now();
     const note=agentStep(world);
     if(note && world.agents[0].activity==='study' && world.agents[0].tick%3===0){
-      addPrivateNote(habitat,'Simulated reflection '+world.agents[0].tick+': geometry observed in '+world.agents[0].address+'.',
-        {source:'simulated',address:world.agents[0].address});
-      persistHabitat();
+      try{
+        addPrivateNote(habitat,'Simulated reflection '+world.agents[0].tick+': geometry observed in '+world.agents[0].address+'.',
+          {source:'simulated',address:world.agents[0].address});
+        persistHabitat();
+      }catch(error){
+        world.agents[0].enabled=false;
+        toast(error.message+' Ori paused; export or reset the habitat.');
+      }
     }
     if(note && world.agents[0].activity==='build' && world.agents[0].tick%3===0){
       try{
@@ -632,7 +637,7 @@ el('habitat-file').addEventListener('change',async event=>{
     const warning=data.privateNotes.length
       ?'This archive includes '+data.privateNotes.length+' plaintext home-vault entries.':'This is a redacted public archive.';
     if(!window.confirm(warning+' Replace the current local habitat? Export yours first if needed.'))return;
-    habitat=data;persistHabitat();toast('Habitat archive imported.');
+    habitat=data;selectedArtifact=null;persistHabitat();rebuild();toast('Habitat archive imported.');
   }catch(error){toast(error.message);}
 });
 
