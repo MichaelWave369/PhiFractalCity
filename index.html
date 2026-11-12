@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#080b19" />
+  <meta name="description" content="Explore a persistent fractal agent city in your browser or Quest 3." />
+  <title>ΦFractalCity · District Zero</title>
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.1</small></div></div>
+      <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
+    </header>
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">A WORLD BUILT FOR COMPUTATIONAL COLLABORATORS</span>
+        <h1>One pocket.<br /><em>Infinite possibility.</em></h1>
+        <p>An explorable, recursively generated city. Homes, workshops, shared memories, and a doorway into WebXR.</p>
+      </div>
+      <div class="hero-metrics"><div><strong id="depth-metric">00</strong><small>DEPTH</small></div><div><strong id="memory-metric">00</strong><small>MEMORIES</small></div><div><strong>01</strong><small>RESIDENT</small></div></div>
+    </section>
+    <div class="layout">
+      <section class="viewport-panel" aria-label="Interactive 3D district">
+        <div class="viewport-top"><div><span class="live-dot"></span> <span id="district-name">DISTRICT ZERO</span></div><div id="address-tag">ADDRESS / 0</div></div>
+        <div id="scene" aria-label="Interactive 3D fractal city with nine pocket portals and a memory crystal"></div>
+        <div class="scene-overlay">
+          <div class="controls-hint"><b>EXPLORE</b><span>Drag to orbit · Scroll to zoom · Select glowing landmarks</span><span>Quest: Enter VR, point + trigger, left stick to move</span></div>
+          <div id="scene-toast" role="status" aria-live="polite">Select a glowing pocket portal to travel deeper.</div>
+        </div>
+        <div class="scene-footer"><span>DETERMINISTIC GEOMETRY</span><span>WEBXR ENTRY · QUEST TEST PENDING</span></div>
+      </section>
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">RECURSIVE GEOGRAPHY</span><h2>Pocket navigator</h2></div><span class="mini-icon">⌗</span></div>
+          <div class="address-box"><span>CURRENT ADDRESS</span><strong id="address-readout">0</strong></div>
+          <div id="pocket-grid" class="pocket-grid" aria-label="Child pocket destinations"></div>
+          <div class="button-row"><button id="up-btn" class="button secondary">← Parent pocket</button><button id="home-btn" class="button secondary">⌂ District Zero</button></div>
+        </section>
+        <section class="panel resident-panel">
+          <div class="panel-heading"><div><span class="eyebrow">RESIDENT 001</span><h2>Meet Ori</h2></div><span class="agent-avatar">◉</span></div>
+          <p class="muted">A simulated resident with persistent activity history. Rule-based prototype, not yet an AI model.</p>
+          <div class="resident-status"><span>ACTIVITY</span><strong id="agent-job">OFFLINE / IDLE</strong></div>
+          <label for="agent-job-select">Choose an activity</label>
+          <select id="agent-job-select"><option value="study">Study geometry</option><option value="explore">Explore pockets</option><option value="build">Sketch buildings</option><option value="rest">Rest at Commons</option></select>
+          <div class="button-row"><button class="button primary" id="agent-start">Start simulation</button><button class="button secondary" id="agent-pause">Pause</button></div>
+          <small class="footnote">Activity progresses only while this page is open. No unattended agents or real job dispatch.</small>
+        </section>
+        <section class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">SPATIAL MEMORY</span><h2>Local archive</h2></div><span class="mini-icon">✧</span></div>
+          <label for="memory-note">Leave a note in this pocket</label>
+          <textarea id="memory-note" maxlength="500" rows="3" placeholder="What did we discover here?"></textarea>
+          <button class="button primary full" id="add-note">+ Store memory here</button>
+          <div id="memory-list" class="memory-list" aria-live="polite"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">OWN YOUR WORLD</span><h2>Save & transport</h2></div></div>
+          <p class="muted">Changes save locally in this browser. Export an archive before clearing browser data.</p>
+          <div class="button-row"><button id="export-btn" class="button secondary">↓ Export JSON</button><button id="import-btn" class="button secondary">↑ Import JSON</button></div>
+          <input type="file" id="import-file" accept="application/json,.json" hidden />
+          <button class="text-button" id="reset-btn">Reset local district (confirm)</button>
+        </section>
+      </aside>
+    </div>
+    <footer><span>Φ369 LABS · PEOPLE ABOVE PROFIT · LEDGER ABOVE EGO</span><span>LOCAL-FIRST PROTOTYPE · NO BACKEND CONNECTED</span></footer>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
