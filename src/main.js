@@ -676,6 +676,7 @@ el('ask-ori').addEventListener('click',async()=>{
   if(modelBusy)return;
   const text=el('ori-question').value;
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
+  const requestedPocket=world.address;
   modelBusy=true;
   latestModelReply=null;
   el('ask-ori').disabled=true;
@@ -684,12 +685,13 @@ el('ask-ori').addEventListener('click',async()=>{
   displayModelStatus('One-shot request · sending only selected public context.');
   updateBoard();
   try{
-    latestModelReply=await askLocalModel({
+    const result=await askLocalModel({
       prompt:text,model,context:makePublicContext(world,habitat)
     });
+    latestModelReply={...result,address:requestedPocket};
     el('model-reply').textContent=latestModelReply.text;
     displayModelStatus('Received · model '+latestModelReply.model+
-      ' · one-shot local inference, unverified · not saved to world memory.');
+      ' · pocket '+latestModelReply.address+' · one-shot, unverified; not saved to world memory.');
     toast('Ori model reply received. Review it before staging any concept.');
   }catch(error){
     latestModelReply=null;
@@ -717,7 +719,7 @@ el('stage-ori-proposal').addEventListener('click',()=>{
     const summary=latestModelReply.text.slice(0,490);
     const proposal=proposeCreation(habitat,summary,{
       kind:'research',author:'ori-001',source:'model-generated',
-      address:world.address,model:latestModelReply.model
+      address:latestModelReply.address,model:latestModelReply.model
     });
     persistHabitat();
     toast('Model suggestion '+proposal.id+' staged. Human approval still required.');
