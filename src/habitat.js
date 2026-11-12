@@ -75,11 +75,16 @@ export function assertValidHabitat(value) {
   if (ids.length !== new Set(ids).size) throw new Error('Duplicate habitat identifiers');
   for (const artifact of value.artifacts) {
     const source = proposals.get(artifact.proposalId);
-    if (!source || source.status !== 'approved' ||
+    if (!source || source.status !== 'approved' || source.reviewedAt !== artifact.publishedAt ||
         source.summary !== artifact.summary || source.kind !== artifact.kind ||
         source.source !== artifact.source || source.address !== artifact.address) {
       throw new Error('Artifact provenance mismatch');
     }
+  }
+  if (value.proposals.some(p =>
+    (p.status === 'pending' && p.reviewedAt !== null) ||
+    (p.status !== 'pending' && p.reviewedAt === null))) {
+    throw new Error('Proposal review status inconsistent');
   }
   if (value.proposals.some(p => p.status === 'approved' && !value.artifacts.some(a => a.proposalId === p.id))) {
     throw new Error('Approved proposals must have published artifacts');
@@ -162,7 +167,10 @@ export function exportHabitat(habitat, { includePrivate = false } = {}) {
     publicData.privateNotes = habitat.privateNotes.map(n => ({ ...n }));
   } else {
     // Redacted snapshots remain valid for reimport and preserve proposal sequence.
-    publicData.sequence = habitat.sequence;
+    // Avoid disclosing even the private note count through a shared sequence counter.
+    const exposedIds = [...publicData.proposals, ...publicData.artifacts]
+      .map(record => Number(record.id.slice(1))).filter(Number.isSafeInteger);
+    publicData.sequence = exposedIds.length ? Math.max(...exposedIds) : 0;
     publicData.privateNotes = [];
   }
   return JSON.stringify(publicData, null, 2);
