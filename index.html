@@ -10,7 +10,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.1</small></div></div>
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.2</small></div></div>
       <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
     </header>
     <section class="hero">
@@ -46,6 +46,37 @@
           <select id="agent-job-select"><option value="study">Study geometry</option><option value="explore">Explore pockets</option><option value="build">Sketch buildings</option><option value="rest">Rest at Commons</option></select>
           <div class="button-row"><button class="button primary" id="agent-start">Start simulation</button><button class="button secondary" id="agent-pause">Pause</button></div>
           <small class="footnote">Activity progresses only while this page is open. No unattended agents or real job dispatch.</small>
+        </section>
+        <section id="habitat-panel" class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">AGENT-NATIVE PLACES</span><h2>Homes & commons</h2></div><span class="mini-icon">⌂</span></div>
+          <p class="muted">Visit resident spaces. These three landmarks live in District Zero and can be selected in 3D or with a VR controller.</p>
+          <div class="habitat-zones" id="habitat-zones"></div>
+          <p id="zone-description" class="muted" aria-live="polite">Select a zone to inspect its purpose.</p>
+        </section>
+        <section id="private-panel" class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">ORI'S HOME VAULT</span><h2>Resident reflections</h2></div><span class="mini-icon">◇</span></div>
+          <p class="muted">Locally scoped prototype memory. Not exposed in ordinary public exports. <strong>Not encrypted or hidden from the browser owner.</strong></p>
+          <label for="private-memory-input">Write a visitor-supplied reflection for Ori</label>
+          <textarea id="private-memory-input" rows="3" maxlength="500" placeholder="An observation to keep in Ori's local residence..."></textarea>
+          <button id="private-memory-save" class="button primary full">Store in home vault</button>
+          <div id="private-memory-list" class="memory-list" aria-live="polite"></div>
+          <button id="private-export" class="button secondary full">↓ Explicit private archive export</button>
+        </section>
+        <section id="workshop-panel" class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">COLLABORATIVE WORKSHOP</span><h2>Propose & create</h2></div><span class="mini-icon">⚒</span></div>
+          <p class="muted">Proposals do not publish until you approve them. Ori's automatic ideas are labeled <strong>SIMULATION</strong>.</p>
+          <label for="proposal-kind">Creation type</label>
+          <select id="proposal-kind"><option value="research">Research</option><option value="sculpture">Sculpture</option><option value="garden">Garden</option><option value="workshop">Workshop</option></select>
+          <label for="proposal-input" class="spaced-label">Describe the idea</label>
+          <textarea id="proposal-input" rows="3" maxlength="500" placeholder="Create a geometric garden at the Commons..."></textarea>
+          <button id="proposal-submit" class="button primary full">+ Submit proposal</button>
+          <h3 class="panel-subhead">Pending review</h3>
+          <div id="proposal-list" class="proposal-list" aria-live="polite"></div>
+          <h3 class="panel-subhead">Published artifact ledger</h3>
+          <div id="artifact-list" class="memory-list" aria-live="polite"></div>
+          <div class="button-row"><button id="habitat-export" class="button secondary">↓ Public JSON</button><button id="habitat-import" class="button secondary">↑ Import JSON</button></div>
+          <input id="habitat-file" type="file" accept="application/json,.json" hidden />
+          <small class="footnote">Public export omits home vault notes. Private export requires explicit confirmation.</small>
         </section>
         <section class="panel">
           <div class="panel-heading"><div><span class="eyebrow">SPATIAL MEMORY</span><h2>Local archive</h2></div><span class="mini-icon">✧</span></div>
