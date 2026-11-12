@@ -193,7 +193,8 @@ export function loadWorld(storage) {
 }
 export function saveWorld(world, storage) {
   try {
-    storage?.setItem(STORAGE_KEY, serializeWorld(world));
+    if (!storage || typeof storage.setItem !== 'function') return false;
+    storage.setItem(STORAGE_KEY, serializeWorld(world));
     return true;
   } catch {
     return false;
