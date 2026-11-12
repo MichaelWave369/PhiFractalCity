@@ -390,10 +390,11 @@ function openZone(id){
   }
 }
 function goDeeper(index){
+  activeZone=null;
   try{enterPocket(world,index);persist();rebuild();toast('Entered '+world.address+'. Procedural district restored.');}
   catch(error){toast(error.message);}
 }
-function goUp(){returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
+function goUp(){activeZone=null;returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
 function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
@@ -510,6 +511,7 @@ rebuild();resize();renderer.setAnimationLoop(animate);
 
 el('up-btn').addEventListener('click',goUp);
 el('home-btn').addEventListener('click',()=>{
+  activeZone=null;
   world.address='0';appendEvent(world,'travel','Visitor returned to District Zero.');
   persist();rebuild();toast('Welcome to District Zero.');
 });
@@ -545,12 +547,12 @@ el('import-file').addEventListener('change',async e=>{
     if(file.size>300000)throw new Error('World file exceeds 300 KB.');
     const imported=parseWorld(await file.text());
     if(!window.confirm('Replace local world with this archive? Export first if needed.'))return;
-    world=imported;persist();rebuild();toast('World archive imported.');
+    activeZone=null;world=imported;persist();rebuild();toast('World archive imported.');
   }catch(error){toast(error.message);}
 });
 el('reset-btn').addEventListener('click',()=>{
   if(!window.confirm('Permanently reset this local world? Export your memories first.'))return;
-  world=makeWorld();persist();rebuild();toast('District Zero reset.');
+  activeZone=null;world=makeWorld();persist();rebuild();toast('District Zero reset; resident habitat preserved.');
 });
 
 
@@ -596,4 +598,13 @@ el('habitat-file').addEventListener('change',async event=>{
     if(!window.confirm(warning+' Replace the current local habitat? Export yours first if needed.'))return;
     habitat=data;persistHabitat();toast('Habitat archive imported.');
   }catch(error){toast(error.message);}
+});
+
+el('habitat-reset').addEventListener('click',()=>{
+  if(!window.confirm('Delete ALL local resident reflections, proposals and published records? Export a private archive first.'))return;
+  habitat=makeHabitat();
+  activeZone=null;
+  persistHabitat();
+  renderHabitat();updateBoard();
+  toast('Local resident habitat reset; District Zero world history preserved.');
 });
