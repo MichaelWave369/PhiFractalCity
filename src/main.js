@@ -15,6 +15,7 @@ import {
   placeConcept, moveConcept, turnConcept, removeConcept
 } from './workbench.js';
 import { createXRConsole } from './xr-console.js';
+import { reviewGate } from './xr-policy.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -509,13 +510,12 @@ function handleXRAction(action,data){
       case 'approve':
       case 'decline':{
         if(!proposal){toast('No pending proposal in this pocket.');return;}
-        const key=action+':'+proposal.id+':'+world.address;
-        if(armedReview?.key!==key||armedReview.until<=Date.now()){
-          armedReview={key,action,until:Date.now()+10000};
+        const gate=reviewGate(armedReview,action,proposal.id,world.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){
           toast('Confirm '+action+' of '+proposal.id+': select the same button again within 10 seconds.');
           break;
         }
-        armedReview=null;
         reviewProposal(habitat,proposal.id,action);
         appendEvent(world,'workshop','VR visitor '+(action==='approve'?'approved':'declined')+' '+proposal.id+'.');
         persistHabitat();persist();
@@ -545,13 +545,12 @@ function handleXRAction(action,data){
       }
       case 'remove':{
         if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
-        const key='remove:'+selectedPlacementId+':'+world.address;
-        if(armedReview?.key!==key||armedReview.until<=Date.now()){
-          armedReview={key,action,until:Date.now()+10000};
+        const gate=reviewGate(armedReview,'remove',selectedPlacementId,world.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){
           toast('Select REMOVE again within 10 seconds to remove this placement.');
           break;
         }
-        armedReview=null;
         removeConcept(workbench,selectedPlacementId);
         selectedPlacementId=null;
         persistWorkbench();rebuild();toast('Placement removed. Original approved idea preserved.');break;
