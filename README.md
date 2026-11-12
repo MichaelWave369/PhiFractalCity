@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.2 candidate. District Zero has a simulated resident, persistent local habitat, opt-in visitor interaction, and a proposal-review workshop. This is not a multi-agent intelligence system. Quest 3 acceptance is pending.
+> **Status:** Rung 0.3 candidate. District Zero and Ori's habitat are merged. Optional **one-shot local Ollama conversations** are in PR review; this is not a continuously autonomous agent. Quest 3 model connectivity and headset acceptance remain pending.
 
 ## Vision
 
@@ -18,9 +18,9 @@ A local-first, recursive, agent-native city that a human collaborator can visit 
 
 Rung 0.1 is merged on `main`. It provides a Three.js/WebXR scene, recursive 3x3 portal navigation, local JSON save/import/export, and one bounded, opt-in rule-based resident activity loop.
 
-## Rung 0.2 candidate: Agent Habitat & Workshop
+## Rung 0.2: Agent Habitat & Workshop
 
-The `feat/agent-habitat-r02` branch adds three selectable District Zero landmarks: **Ori's Home**, **Open Workshop**, and **Common Garden**. Separate local habitat state provides resident-scoped reflections, a workshop proposal queue, review decisions and a ledger of approved creation records. Study and build simulation ticks can generate reflections and proposals, visibly labeled **SIMULATED**. They do not execute real code or represent real AI discoveries.
+Rung 0.2 adds three selectable District Zero landmarks: **Ori's Home**, **Open Workshop**, and **Common Garden**. Separate local habitat state provides resident-scoped reflections, a workshop proposal queue, review decisions and a ledger of approved creation records. Study and build simulation ticks can generate reflections and proposals, visibly labeled **SIMULATED**. They do not execute real code or represent real AI discoveries.
 
 **Privacy boundary:** Home-vault notes are excluded from default public habitat exports. The optional private archive export includes them in unencrypted plaintext and requires explicit confirmation. The vault is NOT private from the browser owner, extensions or code in the same origin. No authentication, server or encrypted storage exists yet.
 
@@ -28,7 +28,14 @@ The `feat/agent-habitat-r02` branch adds three selectable District Zero landmark
 
 **Collaboration boundary:** Workshop submissions create pending records only. Approving a proposal creates a *recorded concept* plus a small **inspectable 3D exhibit marker** in the corresponding pocket. This does **not** construct the proposed building, commit code, or constitute an independently verified AI result.
 
-Once merged:
+## Rung 0.3 candidate: Talk to Ori (opt-in local model)
+
+A hard-coded loopback Ollama adapter (`127.0.0.1:11434`) enables **one question per explicit click**, with bounded public pocket context and a model-labeled reply. The reply is not stored unless you explicitly stage it for separate workshop approval. No private resident notes or pending workshop drafts are shared with the model. No network endpoint configuration, background inference, tool execution or repository writes are enabled.
+
+**Why Ollama first?** PhiStream is an experimental memory-tiered token-ID research engine, not yet a general HTTP chat API. See [Local inference setup, CORS, privacy, and Quest limitations](docs/LOCAL_INFERENCE.md). This integration is a bridge for desktop use, not a claim of a working local-model VR session.
+
+## Run locally
+
 
 ```bash
 npm install
@@ -36,7 +43,7 @@ npm run check
 npm run dev
 ```
 
-Open the printed Vite URL in a desktop browser. WebXR requires HTTPS and compatible headset/browser support. Do not treat desktop testing or CI as physical Quest verification.
+Start your local Ollama model separately, then open the printed Vite URL in a desktop browser. WebXR requires HTTPS and compatible headset/browser support. Do not treat desktop testing or CI as physical Quest verification.
 
 ## Principles
 
