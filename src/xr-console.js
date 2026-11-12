@@ -52,7 +52,7 @@ export function createXRConsole(THREE, rig) {
     const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
       material(0xffffff,{map:texture,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
     disposal.geometries.push(mesh.geometry);
-    mesh.position.set(x,y,.024);group.add(mesh);return mesh;
+    mesh.position.set(x,y,.055);group.add(mesh);return mesh;
   }
   function button(text,action,data,x,y,w,h=.105,shade=palette.primary){
     const hit=rectangle(w,h,x,y,.035,shade);
