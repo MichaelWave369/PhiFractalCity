@@ -85,3 +85,11 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 .review-row .button{padding:9px 7px;font-size:10px}
 #private-export{margin-top:14px}
 #zone-description{margin:10px 0 0}
+
+/* R0.3 bounded local inference */
+.model-panel{background:linear-gradient(145deg,#18253b,#111a2c)}
+.model-panel input[type="text"]{background:#0b1424;border:1px solid #3b4a68;color:#dde6ff;border-radius:8px;padding:10px;width:100%;outline-color:#8b9dff}
+.model-panel code{font-size:11px;color:#b5daf1}
+.model-panel .button:disabled{opacity:.45;cursor:not-allowed}
+#model-state{padding:12px 0 7px;font-size:10px;color:#8bd5cb;overflow-wrap:anywhere}
+.model-reply{padding:15px 12px;background:#091323;border:1px solid #334666;border-radius:9px;color:#d5e3f7;min-height:64px;max-height:180px;overflow:auto;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
