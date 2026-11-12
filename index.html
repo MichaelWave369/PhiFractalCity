@@ -10,7 +10,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.2</small></div></div>
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.3</small></div></div>
       <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
     </header>
     <section class="hero">
@@ -46,6 +46,21 @@
           <select id="agent-job-select"><option value="study">Study geometry</option><option value="explore">Explore pockets</option><option value="build">Sketch buildings</option><option value="rest">Rest at Commons</option></select>
           <div class="button-row"><button class="button primary" id="agent-start">Start simulation</button><button class="button secondary" id="agent-pause">Pause</button></div>
           <small class="footnote">Activity progresses only while this page is open. No unattended agents or real job dispatch.</small>
+        </section>
+        <section id="model-panel" class="panel model-panel">
+          <div class="panel-heading"><div><span class="eyebrow">RUNG 0.3 · OPTIONAL LOCAL INFERENCE</span><h2>Talk to Ori</h2></div><span class="mini-icon">✧</span></div>
+          <p class="muted">One question at a time using Ollama on <code>127.0.0.1:11434</code>. No requests are sent until you press Ask. This is an experimental model response, not an autonomous agent.</p>
+          <label for="local-model-name">Installed Ollama model ID</label>
+          <input id="local-model-name" type="text" value="qwen3:4b" maxlength="80" spellcheck="false" autocomplete="off" aria-describedby="local-model-hint"/>
+          <small id="local-model-hint" class="footnote">Works only when this browser can reach your own Ollama service and its origin is permitted. On Quest, localhost refers to the headset, not your PC.</small>
+          <label class="spaced-label" for="ori-question">Ask about the current public pocket</label>
+          <textarea id="ori-question" maxlength="500" rows="3" placeholder="What could we build in this neighborhood?"></textarea>
+          <p class="muted">Sends your question, this pocket address, up to four public notes and four approved concepts. <strong>Never the home vault or unapproved proposals.</strong></p>
+          <div class="button-row"><button id="ask-ori" class="button primary">Ask local Ori</button><button id="clear-ori" class="button secondary">Clear reply</button></div>
+          <div id="model-state" class="muted" role="status" aria-live="polite">Disconnected · no model request sent.</div>
+          <div id="model-reply" class="model-reply" aria-live="polite">No response yet.</div>
+          <button id="stage-ori-proposal" class="button secondary full" disabled>+ Stage reply as proposal for review</button>
+          <small class="footnote">Model text is unverified. Staging requires a click; publishing requires a separate approval. No tools, code execution, or background requests.</small>
         </section>
         <section id="habitat-panel" class="panel">
           <div class="panel-heading"><div><span class="eyebrow">AGENT-NATIVE PLACES</span><h2>Homes & commons</h2></div><span class="mini-icon">⌂</span></div>

@@ -11,6 +11,15 @@ export const MAX_PROPOSALS = 80;
 export const MAX_ARTIFACTS = 80;
 export const MAX_TEXT = 500;
 export const PROPOSAL_KINDS = ['sculpture', 'garden', 'research', 'workshop'];
+const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,79}$/;
+const VALID_SOURCES = ['simulated', 'visitor-supplied', 'model-generated'];
+const matchingOrigin = x =>
+  (x.author === RESIDENT_ID && (x.source === 'simulated' || x.source === 'model-generated')) ||
+  (x.author === 'visitor' && x.source === 'visitor-supplied');
+const validModel = x =>
+  x.source === 'model-generated'
+    ? typeof x.model === 'string' && MODEL_ID.test(x.model)
+    : (x.model === null || x.model === undefined);
 export const HABITAT_ZONES = Object.freeze([
   { id: 'home', label: "Ori's Home", address: '0', x: -8, z: 0, description: 'Personal sanctuary and private notes' },
   { id: 'workshop', label: 'Open Workshop', address: '0', x: 8, z: 0, description: 'Propose, review and publish creations' },
@@ -54,9 +63,7 @@ export function assertValidHabitat(value) {
         ![RESIDENT_ID, 'visitor'].includes(p.author) ||
         !PROPOSAL_KINDS.includes(p.kind) || !isText(p.summary) ||
         !['pending', 'approved', 'declined'].includes(p.status) ||
-        !['simulated', 'visitor-supplied'].includes(p.source) ||
-        (p.author === RESIDENT_ID && p.source !== 'simulated') ||
-        (p.author === 'visitor' && p.source !== 'visitor-supplied') ||
+        !VALID_SOURCES.includes(p.source) || !matchingOrigin(p) || !validModel(p) ||
         !isAddress(p.address) || !isTime(p.time) ||
         !(p.reviewedAt === null || isTime(p.reviewedAt)))) {
     throw new Error('Invalid workshop proposals');
@@ -67,7 +74,7 @@ export function assertValidHabitat(value) {
         typeof a.proposalId !== 'string' || a.proposalId.length > 24 ||
         !isText(a.summary) || !PROPOSAL_KINDS.includes(a.kind) ||
         !isAddress(a.address) || !isTime(a.publishedAt) ||
-        !['simulated', 'visitor-supplied'].includes(a.source))) {
+        !VALID_SOURCES.includes(a.source) || !validModel(a))) {
     throw new Error('Invalid artifacts');
   }
   const proposals = new Map(value.proposals.map(p => [p.id, p]));
@@ -77,7 +84,8 @@ export function assertValidHabitat(value) {
     const source = proposals.get(artifact.proposalId);
     if (!source || source.status !== 'approved' || source.reviewedAt !== artifact.publishedAt ||
         source.summary !== artifact.summary || source.kind !== artifact.kind ||
-        source.source !== artifact.source || source.address !== artifact.address) {
+        source.source !== artifact.source || source.address !== artifact.address ||
+        (source.model ?? null) !== (artifact.model ?? null)) {
       throw new Error('Artifact provenance mismatch');
     }
   }
@@ -105,26 +113,24 @@ export function addPrivateNote(habitat, text, { source = 'visitor-supplied', add
   return note;
 }
 export function proposeCreation(habitat, summary, {
-  kind = 'research', author = 'visitor', source = 'visitor-supplied', address = '0'
+  kind = 'research', author = 'visitor', source = 'visitor-supplied', address = '0', model = null
 } = {}) {
   if (!isText(summary) || !PROPOSAL_KINDS.includes(kind) ||
       ![RESIDENT_ID, 'visitor'].includes(author) ||
-      !['simulated', 'visitor-supplied'].includes(source) || !isAddress(address)) {
+      !VALID_SOURCES.includes(source) || !isAddress(address) ||
+      !matchingOrigin({ author, source }) || !validModel({ source, model })) {
     throw new Error('Invalid creation proposal');
   }
-  if ((author === RESIDENT_ID && source !== 'simulated') ||
-      (author === 'visitor' && source !== 'visitor-supplied')) {
-    throw new Error('Proposal author and provenance must match');
-  }
   const duplicate = habitat.proposals.find(p =>
-    p.status === 'pending' && p.summary === summary.trim() && p.author === author && p.address === address);
+    p.status === 'pending' && p.summary === summary.trim() && p.author === author &&
+    p.address === address && p.source === source && (p.model ?? null) === model);
   if (duplicate) return duplicate;
   if (habitat.proposals.length >= MAX_PROPOSALS) {
     throw new Error('Workshop ledger full; export and archive before adding more');
   }
   const proposal = {
     id: 'p' + (++habitat.sequence), author, source, address,
-    kind, summary: summary.trim(), status: 'pending',
+    kind, model, summary: summary.trim(), status: 'pending',
     time: new Date().toISOString(), reviewedAt: null
   };
   habitat.proposals.push(proposal);
@@ -143,6 +149,7 @@ export function reviewProposal(habitat, id, decision) {
     const artifact = {
       id: 'a' + (++habitat.sequence), proposalId: proposal.id, address: proposal.address,
       kind: proposal.kind, summary: proposal.summary, source: proposal.source,
+      model: proposal.model ?? null,
       publishedAt: proposal.reviewedAt
     };
     habitat.artifacts.push(artifact);

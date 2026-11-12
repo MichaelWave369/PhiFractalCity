@@ -9,6 +9,7 @@ import {
   HABITAT_ZONES, makeHabitat, loadHabitat, saveHabitat, parseHabitat,
   exportHabitat, addPrivateNote, proposeCreation, reviewProposal
 } from './habitat.js';
+import { askLocalModel, makePublicContext, DEFAULT_LOCAL_MODEL } from './inference.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -18,6 +19,8 @@ let world = loadWorld(storage);
 let habitat = loadHabitat(storage);
 let activeZone = null;
 let selectedArtifact = null;
+let latestModelReply = null;
+let modelBusy = false;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
 const container = el('scene');
@@ -270,6 +273,11 @@ function updateBoard(){
     ? 'ARTIFACT '+selectedArtifact.id.toUpperCase()+': '+selectedArtifact.summary.slice(0,28)
     : (activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER');
   ctx.fillText(detail,32,326);
+  if(latestModelReply){
+    const clean=latestModelReply.text.replace(/\s+/g,' ').slice(0,64);
+    ctx.fillStyle='#b1ecda';ctx.font='18px system-ui';
+    ctx.fillText('ORI MODEL (UNVERIFIED): '+clean,32,360);
+  }
   board.texture.needsUpdate=true;
 }
 function clearDistrict() {
@@ -331,6 +339,7 @@ function updateUI(){
     grid.append(button);
   }
   renderHabitat();
+  el('stage-ori-proposal').disabled = !latestModelReply || modelBusy;
   const list=el('memory-list');list.replaceChildren();
   const notes=memoriesHere(world).slice(-8).reverse();
   if(!notes.length){
@@ -368,7 +377,10 @@ function renderHabitat(){
   const list=el('proposal-list');list.replaceChildren();
   if(!pending.length)list.append(emptyMessage('No pending proposals. The workshop is ready.'));
   for(const proposal of pending){
-    const entry=habitatEntry((proposal.source==='simulated'?'SIMULATED':'VISITOR')+' · '+proposal.kind.toUpperCase(),proposal.summary);
+    const sourceLabel=proposal.source==='model-generated'
+      ? 'MODEL-GENERATED · '+(proposal.model||'UNKNOWN MODEL')
+      : proposal.source==='simulated'?'SIMULATED':'VISITOR';
+    const entry=habitatEntry(sourceLabel+' · '+proposal.kind.toUpperCase(),proposal.summary);
     const actions=document.createElement('div');actions.className='review-row';
     for(const [decision,text] of [['approve','Approve & publish'],['decline','Decline']]){
       const b=document.createElement('button');b.className='button '+(decision==='approve'?'primary':'secondary');
@@ -389,7 +401,9 @@ function renderHabitat(){
   const approved=habitat.artifacts.slice(-8).reverse();
   if(!approved.length)artifacts.append(emptyMessage('Published creations will appear here.'));
   for(const a of approved){
-    artifacts.append(habitatEntry(a.kind.toUpperCase()+' · '+(a.source==='simulated'?'SIMULATED ORIGIN':'VISITOR ORIGIN'),a.summary));
+    const origin=a.source==='model-generated'?'MODEL · '+(a.model||'UNKNOWN')
+      :a.source==='simulated'?'SIMULATED ORIGIN':'VISITOR ORIGIN';
+    artifacts.append(habitatEntry(a.kind.toUpperCase()+' · '+origin,a.summary));
   }
 }
 function emptyMessage(message){
@@ -436,7 +450,9 @@ function interact(hit){
     return;
   }
   if(hit.kind==='agent'){
-    toast('Ori is '+(world.agents[0].enabled?world.agents[0].activity:'idle')+'. Set an activity in the resident panel.');
+    toast(latestModelReply
+      ? 'Ori last model reply: '+latestModelReply.text.slice(0,180)
+      : 'Ori is '+(world.agents[0].enabled?world.agents[0].activity:'idle')+'. Use Talk to Ori for an explicit local model request.');
     return;
   }
   if(hit.kind==='memory'){
@@ -649,4 +665,64 @@ el('habitat-reset').addEventListener('click',()=>{
   persistHabitat();
   renderHabitat();updateBoard();
   toast('Local resident habitat reset; District Zero world history preserved.');
+});
+
+
+/* Single-request conversation: explicit user click, no background polling, no automatic memory writes. */
+function displayModelStatus(message){
+  el('model-state').textContent=message;
+}
+el('ask-ori').addEventListener('click',async()=>{
+  if(modelBusy)return;
+  const text=el('ori-question').value;
+  const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
+  const requestedPocket=world.address;
+  modelBusy=true;
+  latestModelReply=null;
+  el('ask-ori').disabled=true;
+  el('stage-ori-proposal').disabled=true;
+  el('model-reply').textContent='Contacting your local Ollama runtime…';
+  displayModelStatus('One-shot request · sending only selected public context.');
+  updateBoard();
+  try{
+    const result=await askLocalModel({
+      prompt:text,model,context:makePublicContext(world,habitat)
+    });
+    latestModelReply={...result,address:requestedPocket};
+    el('model-reply').textContent=latestModelReply.text;
+    displayModelStatus('Received · model '+latestModelReply.model+
+      ' · pocket '+latestModelReply.address+' · one-shot, unverified; not saved to world memory.');
+    toast('Ori model reply received. Review it before staging any concept.');
+  }catch(error){
+    latestModelReply=null;
+    el('model-reply').textContent='No usable response.';
+    displayModelStatus(error.message);
+    toast(error.message);
+  }finally{
+    modelBusy=false;
+    el('ask-ori').disabled=false;
+    el('stage-ori-proposal').disabled=!latestModelReply;
+    updateBoard();
+  }
+});
+el('clear-ori').addEventListener('click',()=>{
+  if(modelBusy){toast('Current request must complete or time out.');return;}
+  latestModelReply=null;
+  el('model-reply').textContent='No response yet.';
+  el('stage-ori-proposal').disabled=true;
+  displayModelStatus('Cleared · nothing stored in the world.');
+  updateBoard();
+});
+el('stage-ori-proposal').addEventListener('click',()=>{
+  if(modelBusy || !latestModelReply)return;
+  try{
+    const summary=latestModelReply.text.slice(0,490);
+    const proposal=proposeCreation(habitat,summary,{
+      kind:'research',author:'ori-001',source:'model-generated',
+      address:latestModelReply.address,model:latestModelReply.model
+    });
+    persistHabitat();
+    toast('Model suggestion '+proposal.id+' staged. Human approval still required.');
+    el('workshop-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(error){toast(error.message);}
 });
