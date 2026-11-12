@@ -110,3 +110,33 @@ test('workshop rejects forged review timestamps on import',()=>{
   tampered.proposals[0].reviewedAt=new Date().toISOString();
   assert.throws(()=>parseHabitat(JSON.stringify(tampered)),/review status/);
 });
+
+test('model-backed proposals preserve model name and require review',()=>{
+  const h=makeHabitat();
+  const p=proposeCreation(h,'A model-suggested public reading garden.',{
+    kind:'garden',author:'ori-001',source:'model-generated',model:'qwen3:4b'
+  });
+  assert.equal(p.status,'pending');
+  assert.equal(p.model,'qwen3:4b');
+  assert.equal(h.artifacts.length,0);
+  const artifact=reviewProposal(h,p.id,'approve');
+  assert.equal(artifact.source,'model-generated');
+  assert.equal(artifact.model,'qwen3:4b');
+  assert.equal(parseHabitat(exportHabitat(h)).artifacts[0].model,'qwen3:4b');
+});
+test('reject model provenance without a model ID or with a mismatched source',()=>{
+  const h=makeHabitat();
+  assert.throws(()=>proposeCreation(h,'Unattributed synthetic idea',{
+    author:'ori-001',source:'model-generated'
+  }));
+  assert.throws(()=>proposeCreation(h,'Falsely attributed human text',{
+    author:'visitor',source:'model-generated',model:'qwen3:4b'
+  }));
+  const p=proposeCreation(h,'Verified source metadata only, not verified claims.',{
+    author:'ori-001',source:'model-generated',model:'qwen3:4b'
+  });
+  reviewProposal(h,p.id,'approve');
+  const forged=JSON.parse(exportHabitat(h));
+  forged.artifacts[0].model='gemma3:12b';
+  assert.throws(()=>parseHabitat(JSON.stringify(forged)),/provenance/i);
+});
