@@ -5,12 +5,18 @@ import {
   MAX_DEPTH, generateDistrict, makeWorld, loadWorld, saveWorld, parseWorld, serializeWorld,
   addMemory, memoriesHere, agentStep, setAgentJob, enterPocket, returnPocket, appendEvent
 } from './world.js';
+import {
+  HABITAT_ZONES, makeHabitat, loadHabitat, saveHabitat, parseHabitat,
+  exportHabitat, addPrivateNote, proposeCreation, reviewProposal
+} from './habitat.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
 let storage = null;
 try { storage = window.localStorage; } catch { /* private/blocked storage */ }
 let world = loadWorld(storage);
+let habitat = loadHabitat(storage);
+let activeZone = null;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
 const container = el('scene');
@@ -175,6 +181,44 @@ function buildResident() {
   halo.rotation.x=Math.PI/2;resident.add(halo);
   label('ORI · RESIDENT',5.8,4.45,6,4.2);
 }
+
+function buildHabitatZones(){
+  if(world.address!=='0')return;
+  const baseColors={home:'#8778e2',workshop:'#5fd5de',commons:'#6ed2a9'};
+  HABITAT_ZONES.forEach((zone,index)=>{
+    const color=baseColors[zone.id];
+    cube(3.3,.28,3.3,mat('#243856'),zone.x,.19,zone.z);
+    cube(2.7,.12,2.7,mat(color,{emissive:color,emissiveIntensity:.35}),zone.x,.4,zone.z);
+    if(zone.id==='home'){
+      const walls=cube(2.0,2,2,mat('#473d75'),zone.x,1.45,zone.z);
+      register(walls,'zone',zone.id);
+      const roof=new THREE.Mesh(new THREE.ConeGeometry(1.6,1.3,4),
+        mat(color,{emissive:color,emissiveIntensity:.25}));
+      roof.position.set(zone.x,3.1,zone.z);
+      roof.rotation.y=Math.PI/4;
+      register(roof,'zone',zone.id);districtRoot.add(roof);
+    }else if(zone.id==='workshop'){
+      const platform=cube(2.25,.75,2.25,mat('#2b4871'),zone.x,1,zone.z);
+      register(platform,'zone',zone.id);
+      const gear=new THREE.Mesh(new THREE.TorusKnotGeometry(.65,.17,64,8,2,3),
+        mat(color,{emissive:color,emissiveIntensity:.85}));
+      gear.position.set(zone.x,2.5,zone.z);
+      register(gear,'zone',zone.id);districtRoot.add(gear);
+    }else{
+      for(let i=0;i<5;i++){
+        const a=i*Math.PI*2/5;
+        const tree=new THREE.Mesh(new THREE.IcosahedronGeometry(.45,0),
+          mat(color,{emissive:color,emissiveIntensity:.3}));
+        tree.position.set(zone.x+Math.cos(a)*.85,1.3,zone.z+Math.sin(a)*.85);
+        register(tree,'zone',zone.id);districtRoot.add(tree);
+      }
+      const garden=cube(2.1,.18,2.1,mat('#275348'),zone.x,.62,zone.z);
+      register(garden,'zone',zone.id);
+    }
+    label(zone.label.toUpperCase(),zone.x,4.4,zone.z,4.0);
+  });
+}
+
 function buildBoard() {
   const canvas=document.createElement('canvas');
   canvas.width=768;canvas.height=384;
@@ -198,7 +242,7 @@ function updateBoard(){
   ctx.fillText('MEMORIES HERE: '+memoriesHere(world).length,32,181);
   ctx.fillText('ORI: '+(world.agents[0].enabled?world.agents[0].activity.toUpperCase():'IDLE'),32,224);
   ctx.font='20px system-ui';ctx.fillText('TRIGGER A PORTAL TO ENTER',32,294);
-  ctx.fillText('TRIGGER CRYSTAL TO LEAVE A MARKER',32,326);
+  ctx.fillText(activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER',32,326);
   board.texture.needsUpdate=true;
 }
 function clearDistrict() {
@@ -221,7 +265,7 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
-  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildBoard();
+  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildBoard();
   updateUI();
 }
 function toast(message){
@@ -232,6 +276,10 @@ function toast(message){
 function persist(){
   if(!saveWorld(world,storage))toast('Browser storage unavailable: export JSON to keep progress.');
   updateUI();updateBoard();
+}
+function persistHabitat(){
+  if(!saveHabitat(habitat,storage))toast('Habitat not saved: export a private archive to preserve it.');
+  renderHabitat();updateBoard();
 }
 function updateUI(){
   el('district-name').textContent=generateDistrict(world.address,world.seed).name.toUpperCase();
@@ -255,6 +303,7 @@ function updateUI(){
     button.addEventListener('click',()=>goDeeper(i));
     grid.append(button);
   }
+  renderHabitat();
   const list=el('memory-list');list.replaceChildren();
   const notes=memoriesHere(world).slice(-8).reverse();
   if(!notes.length){
@@ -270,6 +319,76 @@ function updateUI(){
     entry.append(who,text);list.append(entry);
   }
 }
+
+function renderHabitat(){
+  const zones=el('habitat-zones');zones.replaceChildren();
+  for(const zone of HABITAT_ZONES){
+    const b=document.createElement('button');
+    b.className='zone-tile'+(activeZone===zone.id?' active':'');
+    const title=document.createElement('strong');title.textContent=zone.label;
+    const desc=document.createElement('span');desc.textContent=zone.description;
+    b.append(title,desc);
+    b.addEventListener('click',()=>openZone(zone.id));
+    zones.append(b);
+  }
+  const privateList=el('private-memory-list');privateList.replaceChildren();
+  const privateNotes=habitat.privateNotes.slice(-6).reverse();
+  if(!privateNotes.length)privateList.append(emptyMessage('No local resident reflections yet.'));
+  for(const note of privateNotes){
+    privateList.append(habitatEntry(note.source==='simulated'?'SIMULATED REFLECTION':'VISITOR-SUPPLIED',note.text));
+  }
+  const pending=habitat.proposals.filter(p=>p.status==='pending').slice(-8).reverse();
+  const list=el('proposal-list');list.replaceChildren();
+  if(!pending.length)list.append(emptyMessage('No pending proposals. The workshop is ready.'));
+  for(const proposal of pending){
+    const entry=habitatEntry((proposal.source==='simulated'?'SIMULATED':'VISITOR')+' · '+proposal.kind.toUpperCase(),proposal.summary);
+    const actions=document.createElement('div');actions.className='review-row';
+    for(const [decision,text] of [['approve','Approve & publish'],['decline','Decline']]){
+      const b=document.createElement('button');b.className='button '+(decision==='approve'?'primary':'secondary');
+      b.textContent=text;
+      b.addEventListener('click',()=>{
+        try{
+          reviewProposal(habitat,proposal.id,decision);
+          appendEvent(world,'workshop','Proposal '+proposal.id+' '+(decision==='approve'?'published':'declined')+'.');
+          persist();persistHabitat();
+          toast(decision==='approve'?'Creation published in local ledger.':'Proposal declined.');
+        }catch(error){toast(error.message);}
+      });actions.append(b);
+    }
+    entry.append(actions);list.append(entry);
+  }
+  const artifacts=el('artifact-list');artifacts.replaceChildren();
+  const approved=habitat.artifacts.slice(-8).reverse();
+  if(!approved.length)artifacts.append(emptyMessage('Published creations will appear here.'));
+  for(const a of approved){
+    artifacts.append(habitatEntry(a.kind.toUpperCase()+' · '+(a.source==='simulated'?'SIMULATED ORIGIN':'VISITOR ORIGIN'),a.summary));
+  }
+}
+function emptyMessage(message){
+  const node=document.createElement('div');node.className='empty-memory';node.textContent=message;return node;
+}
+function habitatEntry(header,body){
+  const node=document.createElement('article');node.className='memory-entry';
+  const strong=document.createElement('strong');strong.textContent=header;
+  const p=document.createElement('p');p.textContent=body;
+  node.append(strong,p);return node;
+}
+function openZone(id){
+  const zone=HABITAT_ZONES.find(z=>z.id===id);
+  if(!zone)return;
+  activeZone=id;
+  el('zone-description').textContent=zone.label+' · '+zone.description;
+  if(world.address!=='0'){
+    world.address='0';appendEvent(world,'travel','Visitor returned to the resident district.');
+    persist();rebuild();
+  }
+  renderHabitat();updateBoard();
+  toast('Entered '+zone.label+'. '+(id==='workshop'?'Review proposals in the workshop panel.':'Local world state remains persistent.'));
+  if(!renderer.xr.isPresenting){
+    const target=id==='home'?'private-panel':id==='workshop'?'workshop-panel':'habitat-panel';
+    el(target).scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
 function goDeeper(index){
   try{enterPocket(world,index);persist();rebuild();toast('Entered '+world.address+'. Procedural district restored.');}
   catch(error){toast(error.message);}
@@ -278,6 +397,7 @@ function goUp(){returnPocket(world);persist();rebuild();toast('Returned to '+wor
 function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
+  if(hit.kind==='zone'){openZone(hit.data);return;}
   if(hit.kind==='agent'){
     toast('Ori is '+(world.agents[0].enabled?world.agents[0].activity:'idle')+'. Set an activity in the resident panel.');
     return;
@@ -368,6 +488,19 @@ function animate(){
   if(world.agents[0].enabled&&performance.now()-lastStep>8500){
     lastStep=performance.now();
     const note=agentStep(world);
+    if(note && world.agents[0].activity==='study' && world.agents[0].tick%3===0){
+      addPrivateNote(habitat,'Simulated reflection '+world.agents[0].tick+': geometry observed in '+world.agents[0].address+'.',
+        {source:'simulated',address:world.agents[0].address});
+      persistHabitat();
+    }
+    if(note && world.agents[0].activity==='build' && world.agents[0].tick%3===0){
+      try{
+        proposeCreation(habitat,'Ori proposed a geometric sculpture concept at '+world.agents[0].address+
+          ' (simulation tick '+world.agents[0].tick+').',
+          {kind:'sculpture',author:'ori-001',source:'simulated',address:world.agents[0].address});
+        persistHabitat();
+      }catch(error){toast(error.message);}
+    }
     persist();
     if(note)toast(note);
   }
@@ -418,4 +551,49 @@ el('import-file').addEventListener('change',async e=>{
 el('reset-btn').addEventListener('click',()=>{
   if(!window.confirm('Permanently reset this local world? Export your memories first.'))return;
   world=makeWorld();persist();rebuild();toast('District Zero reset.');
+});
+
+
+el('private-memory-save').addEventListener('click',()=>{
+  try{
+    addPrivateNote(habitat,el('private-memory-input').value,{source:'visitor-supplied',address:world.address});
+    el('private-memory-input').value='';
+    persistHabitat();toast('Saved in Ori’s local home vault. Not encrypted.');
+  }catch(error){toast(error.message);}
+});
+el('proposal-submit').addEventListener('click',()=>{
+  try{
+    const p=proposeCreation(habitat,el('proposal-input').value,{
+      kind:el('proposal-kind').value,author:'visitor',source:'visitor-supplied',address:world.address
+    });
+    el('proposal-input').value='';
+    persistHabitat();toast('Proposal '+p.id+' recorded for review. Nothing published yet.');
+  }catch(error){toast(error.message);}
+});
+function downloadArchive(filename,contents){
+  const url=URL.createObjectURL(new Blob([contents],{type:'application/json'}));
+  const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+el('habitat-export').addEventListener('click',()=>{
+  downloadArchive('PhiFractalCity-habitat-public.json',exportHabitat(habitat));
+  toast('Public habitat archive exported. Home vault omitted.');
+});
+el('private-export').addEventListener('click',()=>{
+  if(!window.confirm('Export Ori’s local home vault in PLAINTEXT JSON? Anyone with the file can read it.'))return;
+  downloadArchive('PhiFractalCity-habitat-private.json',exportHabitat(habitat,{includePrivate:true}));
+  toast('Private archive exported in plaintext. Store it carefully.');
+});
+el('habitat-import').addEventListener('click',()=>el('habitat-file').click());
+el('habitat-file').addEventListener('change',async event=>{
+  const file=event.target.files?.[0];event.target.value='';
+  if(!file)return;
+  try{
+    if(file.size>300000)throw new Error('Habitat file exceeds 300 KB.');
+    const data=parseHabitat(await file.text());
+    const warning=data.privateNotes.length
+      ?'This archive includes '+data.privateNotes.length+' plaintext home-vault entries.':'This is a redacted public archive.';
+    if(!window.confirm(warning+' Replace the current local habitat? Export yours first if needed.'))return;
+    habitat=data;persistHabitat();toast('Habitat archive imported.');
+  }catch(error){toast(error.message);}
 });
