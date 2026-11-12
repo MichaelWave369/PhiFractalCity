@@ -26,7 +26,7 @@ The `feat/agent-habitat-r02` branch adds three selectable District Zero landmark
 
 **Data portability:** The existing world archive and the new habitat archive are separate JSON files. Export both if you want a complete local backup. A browser profile reset can erase both.
 
-**Collaboration boundary:** Workshop submissions create pending records only. Approving a proposal creates a *recorded concept*, not a constructed 3D building, a repository commit, or an independently verified AI result.
+**Collaboration boundary:** Workshop submissions create pending records only. Approving a proposal creates a *recorded concept* plus a small **inspectable 3D exhibit marker** in the corresponding pocket. This does **not** construct the proposed building, commit code, or constitute an independently verified AI result.
 
 Once merged:
 
