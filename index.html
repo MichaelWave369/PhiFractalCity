@@ -77,6 +77,7 @@
           <div class="button-row"><button id="habitat-export" class="button secondary">↓ Public JSON</button><button id="habitat-import" class="button secondary">↑ Import JSON</button></div>
           <input id="habitat-file" type="file" accept="application/json,.json" hidden />
           <small class="footnote">Public export omits home vault notes. Private export requires explicit confirmation.</small>
+          <button id="habitat-reset" class="text-button">Reset resident habitat (confirm)</button>
         </section>
         <section class="panel">
           <div class="panel-heading"><div><span class="eyebrow">SPATIAL MEMORY</span><h2>Local archive</h2></div><span class="mini-icon">✧</span></div>
@@ -90,7 +91,7 @@
           <p class="muted">Changes save locally in this browser. Export an archive before clearing browser data.</p>
           <div class="button-row"><button id="export-btn" class="button secondary">↓ Export JSON</button><button id="import-btn" class="button secondary">↑ Import JSON</button></div>
           <input type="file" id="import-file" accept="application/json,.json" hidden />
-          <button class="text-button" id="reset-btn">Reset local district (confirm)</button>
+          <button class="text-button" id="reset-btn">Reset district only (habitat kept)</button>
         </section>
       </aside>
     </div>
