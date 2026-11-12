@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.3 candidate. District Zero and Ori's habitat are merged. Optional **one-shot local Ollama conversations** are in PR review; this is not a continuously autonomous agent. Quest 3 model connectivity and headset acceptance remain pending.
+> **Status:** Rung 0.4 candidate. Rungs 0.1–0.3 and the Pages deployment repair are merged. The experimental **VR workshop console and spatial workbench** are under review. Quest 3 hardware acceptance and secure headset-to-PC inference are pending.
 
 ## Vision
 
@@ -28,11 +28,19 @@ Rung 0.2 adds three selectable District Zero landmarks: **Ori's Home**, **Open W
 
 **Collaboration boundary:** Workshop submissions create pending records only. Approving a proposal creates a *recorded concept* plus a small **inspectable 3D exhibit marker** in the corresponding pocket. This does **not** construct the proposed building, commit code, or constitute an independently verified AI result.
 
-## Rung 0.3 candidate: Talk to Ori (opt-in local model)
+## Rung 0.3: Talk to Ori (opt-in local model)
 
 A hard-coded loopback Ollama adapter (`127.0.0.1:11434`) enables **one question per explicit click**, with bounded public pocket context and a model-labeled reply. The reply is not stored unless you explicitly stage it for separate workshop approval. No private resident notes or pending workshop drafts are shared with the model. No network endpoint configuration, background inference, tool execution or repository writes are enabled.
 
 **Why Ollama first?** PhiStream is an experimental memory-tiered token-ID research engine, not yet a general HTTP chat API. See [Local inference setup, CORS, privacy, and Quest limitations](docs/LOCAL_INFERENCE.md). This integration is a bridge for desktop use, not a claim of a working local-model VR session.
+
+## Rung 0.4 candidate: In-world workshop
+
+The experimental WebXR workshop console can browse pending proposals and approved concepts, review with an explicit two-step confirmation, and place or edit geometric exhibit markers. A desktop spatial-workbench panel uses the same versioned layout records. Every placement remains a **local, reversible concept visualization**, not actual construction, a repository write, or online multiplayer.
+
+The app has **three independent JSON backups**: world, habitat, and workbench. All must be exported for a complete archive. In-headset text entry, model access from Quest, secure synchronization, and physical Quest acceptance remain pending.
+
+See [R0.4 XR Workshop Guide](docs/VR_WORKSHOP_R04.md) for input controls, trust boundaries, and a manual test checklist.
 
 ## Run locally
 

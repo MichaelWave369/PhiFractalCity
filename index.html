@@ -10,7 +10,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.3</small></div></div>
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.4</small></div></div>
       <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
     </header>
     <section class="hero">
@@ -93,6 +93,25 @@
           <input id="habitat-file" type="file" accept="application/json,.json" hidden />
           <small class="footnote">Public export omits home vault notes. Private export requires explicit confirmation.</small>
           <button id="habitat-reset" class="text-button">Reset resident habitat (confirm)</button>
+        </section>
+        <section id="workbench-panel" class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">RUNG 0.4 · GEOMETRY STUDIO</span><h2>Spatial workbench</h2></div><span class="mini-icon">◇</span></div>
+          <p class="muted">Arrange approved 3D concept exhibits in this pocket. Local only; no actual code or building construction.</p>
+          <label for="placement-artifact-select">Approved concept in current pocket</label>
+          <select id="placement-artifact-select"></select>
+          <button class="button primary full" id="place-artifact">+ Place selected concept</button>
+          <label class="spaced-label" for="placement-select">Placed objects in current pocket</label>
+          <select id="placement-select"></select>
+          <div class="placement-pad">
+            <button class="button secondary" id="placement-left">←</button>
+            <button class="button secondary" id="placement-forward">↑</button>
+            <button class="button secondary" id="placement-back">↓</button>
+            <button class="button secondary" id="placement-right">→</button>
+          </div>
+          <div class="button-row"><button class="button secondary" id="placement-turn">↻ Rotate 45°</button><button class="button secondary" id="placement-remove">Remove (confirm)</button></div>
+          <div class="button-row"><button class="button secondary" id="workbench-export">↓ Export layout</button><button class="button secondary" id="workbench-import">↑ Import layout</button></div>
+          <input type="file" id="workbench-file" accept="application/json,.json" hidden />
+          <p class="footnote">In Quest VR: press the left grip to show/hide the spatial workshop console. Point and trigger to select controls. The headset interaction is experimental and requires on-device QA.</p>
         </section>
         <section class="panel">
           <div class="panel-heading"><div><span class="eyebrow">SPATIAL MEMORY</span><h2>Local archive</h2></div><span class="mini-icon">✧</span></div>

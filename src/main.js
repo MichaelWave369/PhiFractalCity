@@ -10,6 +10,12 @@ import {
   exportHabitat, addPrivateNote, proposeCreation, reviewProposal
 } from './habitat.js';
 import { askLocalModel, makePublicContext, DEFAULT_LOCAL_MODEL } from './inference.js';
+import {
+  makeWorkbench, loadWorkbench, saveWorkbench, parseWorkbench, exportWorkbench,
+  placeConcept, moveConcept, turnConcept, removeConcept
+} from './workbench.js';
+import { createXRConsole } from './xr-console.js';
+import { reviewGate } from './xr-policy.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -17,6 +23,12 @@ let storage = null;
 try { storage = window.localStorage; } catch { /* private/blocked storage */ }
 let world = loadWorld(storage);
 let habitat = loadHabitat(storage);
+let workbench = loadWorkbench(storage);
+let selectedPlacementId = null;
+let xrTab = 'proposals';
+let xrProposalCursor = 0;
+let xrArtifactCursor = 0;
+let armedReview = null;
 let activeZone = null;
 let selectedArtifact = null;
 let latestModelReply = null;
@@ -32,6 +44,7 @@ const visitorRig = new THREE.Group();
 scene.add(visitorRig);
 visitorRig.add(camera);
 camera.position.set(19, 20, 27);
+const xrConsole = createXRConsole(THREE, visitorRig);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -246,6 +259,31 @@ function buildArtifactGallery(){
   }
   label('APPROVED CONCEPTS · '+local.length,x0,6.3,z0,6.1);
 }
+
+function buildWorkbenchPlacements(){
+  const byArtifact=new Map(habitat.artifacts.map(a=>[a.id,a]));
+  const tints={sculpture:'#d19ff7',garden:'#67dfaf',research:'#85c9f7',workshop:'#f0bd8c'};
+  const display=workbench.placements.filter(p=>p.address===world.address);
+  for(const [i,position] of display.entries()){
+    const art=byArtifact.get(position.artifactId);
+    if(!art)continue; // Unlinked exhibits remain recoverable in layout JSON.
+    const color=tints[art.kind]||'#8bc9e6';
+    let geometry;
+    switch(art.kind){
+      case 'sculpture': geometry=new THREE.DodecahedronGeometry(.95);break;
+      case 'garden': geometry=new THREE.IcosahedronGeometry(.95,1);break;
+      case 'workshop': geometry=new THREE.BoxGeometry(1.65,1.65,1.65);break;
+      default: geometry=new THREE.OctahedronGeometry(.95);break;
+    }
+    const mesh=new THREE.Mesh(geometry,mat(color,{emissive:color,emissiveIntensity:.65,metalness:.1}));
+    mesh.position.set(position.x,2,position.z);
+    mesh.rotation.y=position.yaw*Math.PI/4;
+    register(mesh,'placement',position.id);
+    districtRoot.add(mesh);
+    cube(1.9,.14,1.9,mat('#344e71'),position.x,.98,position.z);
+    if(i<10)label('CONCEPT '+position.id.toUpperCase(),position.x,3.55,position.z,3.5);
+  }
+}
 function buildBoard() {
   const canvas=document.createElement('canvas');
   canvas.width=768;canvas.height=384;
@@ -273,6 +311,8 @@ function updateBoard(){
     ? 'ARTIFACT '+selectedArtifact.id.toUpperCase()+': '+selectedArtifact.summary.slice(0,28)
     : (activeZone ? 'ZONE: '+activeZone.toUpperCase() : 'TRIGGER CRYSTAL TO LEAVE A MARKER');
   ctx.fillText(detail,32,326);
+  ctx.fillStyle='#a9c5f1';ctx.font='17px system-ui';
+  ctx.fillText('PLACED CONCEPTS: '+workbench.placements.filter(p=>p.address===world.address).length,32,263);
   if(latestModelReply){
     const clean=latestModelReply.text.replace(/\s+/g,' ').slice(0,64);
     ctx.fillStyle='#b1ecda';ctx.font='18px system-ui';
@@ -300,7 +340,7 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
-  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildBoard();
+  buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildWorkbenchPlacements();buildBoard();
   updateUI();
 }
 function toast(message){
@@ -314,7 +354,11 @@ function persist(){
 }
 function persistHabitat(){
   if(!saveHabitat(habitat,storage))toast('Habitat not saved: export a private archive to preserve it.');
-  renderHabitat();updateBoard();
+  renderHabitat();refreshXRConsole();updateBoard();
+}
+function persistWorkbench(){
+  if(!saveWorkbench(workbench,storage))toast('Spatial layout not saved: export JSON to preserve it.');
+  renderWorkbenchUI();refreshXRConsole();updateBoard();
 }
 function updateUI(){
   el('district-name').textContent=generateDistrict(world.address,world.seed).name.toUpperCase();
@@ -339,6 +383,8 @@ function updateUI(){
     grid.append(button);
   }
   renderHabitat();
+  renderWorkbenchUI();
+  refreshXRConsole();
   el('stage-ori-proposal').disabled = !latestModelReply || modelBusy;
   const list=el('memory-list');list.replaceChildren();
   const notes=memoriesHere(world).slice(-8).reverse();
@@ -406,6 +452,114 @@ function renderHabitat(){
     artifacts.append(habitatEntry(a.kind.toUpperCase()+' · '+origin,a.summary));
   }
 }
+
+function currentProposals(){return habitat.proposals.filter(p=>p.status==='pending'&&p.address===world.address);}
+function currentArtifacts(){return habitat.artifacts.filter(a=>a.address===world.address);}
+function currentPlacements(){return workbench.placements.filter(p=>p.address===world.address);}
+function option(value,label){
+  const element=document.createElement('option');element.value=value;element.textContent=label;
+  return element;
+}
+function renderWorkbenchUI(){
+  const artifacts=currentArtifacts(),placements=currentPlacements();
+  const artifactSelect=el('placement-artifact-select');
+  const before=artifactSelect.value;
+  artifactSelect.replaceChildren();
+  if(!artifacts.length)artifactSelect.append(option('','No approved concepts here'));
+  for(const art of artifacts)artifactSelect.append(option(art.id,art.id.toUpperCase()+' · '+art.kind));
+  if(artifacts.some(a=>a.id===before))artifactSelect.value=before;
+  const select=el('placement-select');
+  if(!placements.some(p=>p.id===selectedPlacementId))selectedPlacementId=placements[0]?.id||null;
+  select.replaceChildren();
+  if(!placements.length)select.append(option('','No placed concepts'));
+  for(const p of placements)select.append(option(p.id,p.id.toUpperCase()+' · X:'+p.x+' Z:'+p.z));
+  if(selectedPlacementId)select.value=selectedPlacementId;
+  el('place-artifact').disabled=!artifacts.length;
+  for(const id of ['placement-left','placement-right','placement-forward','placement-back',
+    'placement-turn','placement-remove'])el(id).disabled=!selectedPlacementId;
+}
+function refreshXRConsole(){
+  const proposals=currentProposals(),artifacts=currentArtifacts();
+  xrProposalCursor=proposals.length?((xrProposalCursor%proposals.length)+proposals.length)%proposals.length:0;
+  xrArtifactCursor=artifacts.length?((xrArtifactCursor%artifacts.length)+artifacts.length)%artifacts.length:0;
+  const current=artifacts[xrArtifactCursor];
+  const placement=workbench.placements.find(p=>p.id===selectedPlacementId&&p.address===world.address);
+  const armed=armedReview&&armedReview.until>Date.now()?armedReview:null;
+  xrConsole.render({
+    pocket:world.address,tab:xrTab,
+    proposal:proposals[xrProposalCursor]||null,
+    artifact:current||null,
+    placement:placement&&current?.id===placement.artifactId?placement:null,
+    armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+  });
+}
+function handleXRAction(action,data){
+  if(!renderer.xr.isPresenting)return;
+  const proposals=currentProposals(),artifacts=currentArtifacts();
+  const proposal=proposals[xrProposalCursor],artifact=artifacts[xrArtifactCursor];
+  const changeTab=tab=>{xrTab=tab;armedReview=null;};
+  const refresh=()=>{refreshXRConsole();updateBoard();};
+  try{
+    switch(action){
+      case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
+      case 'tab':changeTab(data==='gallery'?'gallery':'proposals');break;
+      case 'prev-proposal':xrProposalCursor=Math.max(0,xrProposalCursor-1);armedReview=null;break;
+      case 'next-proposal':xrProposalCursor+=1;armedReview=null;break;
+      case 'prev-artifact':xrArtifactCursor=Math.max(0,xrArtifactCursor-1);armedReview=null;break;
+      case 'next-artifact':xrArtifactCursor+=1;armedReview=null;break;
+      case 'approve':
+      case 'decline':{
+        if(!proposal){toast('No pending proposal in this pocket.');return;}
+        const gate=reviewGate(armedReview,action,proposal.id,world.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){
+          toast('Confirm '+action+' of '+proposal.id+': select the same button again within 10 seconds.');
+          break;
+        }
+        reviewProposal(habitat,proposal.id,action);
+        appendEvent(world,'workshop','VR visitor '+(action==='approve'?'approved':'declined')+' '+proposal.id+'.');
+        persistHabitat();persist();
+        if(action==='approve')rebuild();
+        toast('Proposal '+proposal.id+' '+(action==='approve'?'approved as an exhibit concept':'declined')+'.');
+        break;
+      }
+      case 'place':{
+        if(!artifact){toast('No approved concept in this pocket.');return;}
+        selectedPlacementId=placeConcept(workbench,habitat,artifact.id,world.address).id;
+        persistWorkbench();rebuild();toast('Placed '+selectedPlacementId+' (editable concept geometry).');
+        break;
+      }
+      case 'rotate':
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        turnConcept(workbench,selectedPlacementId,1);
+        persistWorkbench();rebuild();break;
+      case 'move-left':
+      case 'move-right':
+      case 'move-forward':
+      case 'move-back':{
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        const step=action==='move-left'?[-1,0]:action==='move-right'?[1,0]:
+          action==='move-forward'?[0,-1]:[0,1];
+        moveConcept(workbench,selectedPlacementId,...step);
+        persistWorkbench();rebuild();break;
+      }
+      case 'remove':{
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        const gate=reviewGate(armedReview,'remove',selectedPlacementId,world.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){
+          toast('Select REMOVE again within 10 seconds to remove this placement.');
+          break;
+        }
+        removeConcept(workbench,selectedPlacementId);
+        selectedPlacementId=null;
+        persistWorkbench();rebuild();toast('Placement removed. Original approved idea preserved.');break;
+      }
+      default:toast('Unknown XR workshop action');return;
+    }
+  }catch(error){toast(error.message);}
+  refresh();
+}
 function emptyMessage(message){
   const node=document.createElement('div');node.className='empty-memory';node.textContent=message;return node;
 }
@@ -443,6 +597,14 @@ function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
   if(hit.kind==='zone'){openZone(hit.data);return;}
+  if(hit.kind==='xr-console'){handleXRAction(hit.action,hit.data);return;}
+  if(hit.kind==='placement'){
+    selectedPlacementId=hit.data;
+    renderWorkbenchUI();refreshXRConsole();
+    const chosen=workbench.placements.find(p=>p.id===hit.data);
+    toast(chosen?'Selected spatial concept '+chosen.id+'.':'Spatial concept not found.');
+    return;
+  }
   if(hit.kind==='artifact'){
     selectedArtifact=habitat.artifacts.find(a=>a.id===hit.data)||null;
     updateBoard();
@@ -461,7 +623,9 @@ function interact(hit){
   }
 }
 function pick(ray){
-  const found=ray.intersectObjects(interactives,false);
+  const targets=renderer.xr.isPresenting && xrConsole.isVisible()
+    ? interactives.concat(xrConsole.targets) : interactives;
+  const found=ray.intersectObjects(targets,false);
   return found[0]?.object.userData.interaction||null;
 }
 const pointer={x:0,y:0,dragged:false};
@@ -487,6 +651,12 @@ for(let i=0;i<2;i++){
   );
   controller.add(rayLine);
   visitorRig.add(controller);
+  if(i===0)controller.addEventListener('squeezestart',()=>{
+    if(!renderer.xr.isPresenting)return;
+    const visible=xrConsole.toggle();
+    if(visible)refreshXRConsole();
+    toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
+  });
   controller.addEventListener('selectstart',()=>{
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0,0,-1).transformDirection(controller.matrixWorld);
@@ -498,9 +668,11 @@ renderer.xr.addEventListener('sessionstart',()=>{
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
   camera.position.set(0,0,0);
-  toast('WebXR session started. Point and trigger to interact.');
+  xrConsole.show();refreshXRConsole();
+  toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
+  xrConsole.hide();
   visitorRig.position.set(0,0,0);
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
   orbit.enabled=true;orbit.target.set(0,2,0);orbit.update();
@@ -724,5 +896,65 @@ el('stage-ori-proposal').addEventListener('click',()=>{
     persistHabitat();
     toast('Model suggestion '+proposal.id+' staged. Human approval still required.');
     el('workshop-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(error){toast(error.message);}
+});
+
+
+/* Desktop acceptance lane for the same reviewed spatial placement operations used in XR. */
+el('placement-select').addEventListener('change',value=>{
+  selectedPlacementId=value.target.value||null;
+  refreshXRConsole();
+});
+el('place-artifact').addEventListener('click',()=>{
+  try{
+    const artId=el('placement-artifact-select').value;
+    selectedPlacementId=placeConcept(workbench,habitat,artId,world.address).id;
+    persistWorkbench();rebuild();
+    toast('3D concept placement '+selectedPlacementId+' saved locally.');
+  }catch(error){toast(error.message);}
+});
+function editPlacement(action){
+  try{
+    if(!selectedPlacementId)throw new Error('Select a placed concept first');
+    if(action==='rotate')turnConcept(workbench,selectedPlacementId,1);
+    else{
+      const delta={left:[-1,0],right:[1,0],forward:[0,-1],back:[0,1]}[action];
+      if(!delta)throw new Error('Unknown placement action');
+      moveConcept(workbench,selectedPlacementId,...delta);
+    }
+    persistWorkbench();rebuild();toast('Placement updated. Export the layout for a portable backup.');
+  }catch(error){toast(error.message);}
+}
+for(const [id,action] of [
+  ['placement-left','left'],['placement-right','right'],
+  ['placement-forward','forward'],['placement-back','back'],
+  ['placement-turn','rotate']
+]){
+  el(id).addEventListener('click',()=>editPlacement(action));
+}
+el('placement-remove').addEventListener('click',()=>{
+  if(!selectedPlacementId)return;
+  if(!window.confirm('Remove this local 3D placement? Its approved concept will remain published.'))return;
+  try{
+    removeConcept(workbench,selectedPlacementId);
+    selectedPlacementId=null;
+    persistWorkbench();rebuild();toast('Placement removed; approved concept still preserved.');
+  }catch(error){toast(error.message);}
+});
+el('workbench-export').addEventListener('click',()=>{
+  downloadArchive('PhiFractalCity-workbench.json',exportWorkbench(workbench));
+  toast('Spatial workbench JSON exported. Keep your world and habitat backups separately.');
+});
+el('workbench-import').addEventListener('click',()=>el('workbench-file').click());
+el('workbench-file').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];e.target.value='';
+  if(!file)return;
+  try{
+    if(file.size>60000)throw new Error('Workbench file exceeds 60 KB.');
+    const incoming=parseWorkbench(await file.text());
+    if(!window.confirm('Replace local 3D layout from this file? Export your existing layout first.'))return;
+    workbench=incoming;
+    selectedPlacementId=null;
+    persistWorkbench();rebuild();toast('Spatial layout imported. Unlinked exhibits are retained as data but not drawn.');
   }catch(error){toast(error.message);}
 });
