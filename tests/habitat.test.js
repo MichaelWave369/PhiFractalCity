@@ -87,3 +87,26 @@ test('redacted and full exports share proposal IDs and preserve source labels', 
   assert.equal(publicCopy.privateNotes.length, 0);
   assert.equal(fullCopy.privateNotes.length, 1);
 });
+
+test('private notes cannot reveal their count in the default public sequence',()=>{
+  const h=makeHabitat();
+  for(let i=0;i<3;i++)addPrivateNote(h,'Private observation '+i);
+  const exported=JSON.parse(exportHabitat(h));
+  assert.equal(exported.privateNotes.length,0);
+  assert.equal(exported.sequence,0);
+  assert.equal(parseHabitat(JSON.stringify(exported)).sequence,0);
+});
+test('full record capacity rejects writes rather than discarding notes',()=>{
+  const h=makeHabitat();
+  for(let i=0;i<80;i++)addPrivateNote(h,'Observation '+i);
+  assert.throws(()=>addPrivateNote(h,'Overflow'),/full/i);
+  assert.equal(h.privateNotes.length,80);
+  assert.equal(h.privateNotes[0].text,'Observation 0');
+});
+test('workshop rejects forged review timestamps on import',()=>{
+  const h=makeHabitat();
+  proposeCreation(h,'A signed research concept.');
+  const tampered=JSON.parse(exportHabitat(h));
+  tampered.proposals[0].reviewedAt=new Date().toISOString();
+  assert.throws(()=>parseHabitat(JSON.stringify(tampered)),/review status/);
+});
