@@ -451,6 +451,116 @@ function renderHabitat(){
     artifacts.append(habitatEntry(a.kind.toUpperCase()+' · '+origin,a.summary));
   }
 }
+
+function currentProposals(){return habitat.proposals.filter(p=>p.status==='pending'&&p.address===world.address);}
+function currentArtifacts(){return habitat.artifacts.filter(a=>a.address===world.address);}
+function currentPlacements(){return workbench.placements.filter(p=>p.address===world.address);}
+function option(value,label){
+  const element=document.createElement('option');element.value=value;element.textContent=label;
+  return element;
+}
+function renderWorkbenchUI(){
+  const artifacts=currentArtifacts(),placements=currentPlacements();
+  const artifactSelect=el('placement-artifact-select');
+  const before=artifactSelect.value;
+  artifactSelect.replaceChildren();
+  if(!artifacts.length)artifactSelect.append(option('','No approved concepts here'));
+  for(const art of artifacts)artifactSelect.append(option(art.id,art.id.toUpperCase()+' · '+art.kind));
+  if(artifacts.some(a=>a.id===before))artifactSelect.value=before;
+  const select=el('placement-select');
+  if(!placements.some(p=>p.id===selectedPlacementId))selectedPlacementId=placements[0]?.id||null;
+  select.replaceChildren();
+  if(!placements.length)select.append(option('','No placed concepts'));
+  for(const p of placements)select.append(option(p.id,p.id.toUpperCase()+' · X:'+p.x+' Z:'+p.z));
+  if(selectedPlacementId)select.value=selectedPlacementId;
+  el('place-artifact').disabled=!artifacts.length;
+  for(const id of ['placement-left','placement-right','placement-forward','placement-back',
+    'placement-turn','placement-remove'])el(id).disabled=!selectedPlacementId;
+}
+function refreshXRConsole(){
+  const proposals=currentProposals(),artifacts=currentArtifacts();
+  xrProposalCursor=proposals.length?((xrProposalCursor%proposals.length)+proposals.length)%proposals.length:0;
+  xrArtifactCursor=artifacts.length?((xrArtifactCursor%artifacts.length)+artifacts.length)%artifacts.length:0;
+  const current=artifacts[xrArtifactCursor];
+  const placement=workbench.placements.find(p=>p.id===selectedPlacementId&&p.address===world.address);
+  const armed=armedReview&&armedReview.until>Date.now()?armedReview:null;
+  xrConsole.render({
+    pocket:world.address,tab:xrTab,
+    proposal:proposals[xrProposalCursor]||null,
+    artifact:current||null,
+    placement:placement&&current?.id===placement.artifactId?placement:null,
+    armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+  });
+}
+function handleXRAction(action,data){
+  if(!renderer.xr.isPresenting)return;
+  const proposals=currentProposals(),artifacts=currentArtifacts();
+  const proposal=proposals[xrProposalCursor],artifact=artifacts[xrArtifactCursor];
+  const changeTab=tab=>{xrTab=tab;armedReview=null;};
+  const refresh=()=>{refreshXRConsole();updateBoard();};
+  try{
+    switch(action){
+      case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
+      case 'tab':changeTab(data==='gallery'?'gallery':'proposals');break;
+      case 'prev-proposal':xrProposalCursor=Math.max(0,xrProposalCursor-1);armedReview=null;break;
+      case 'next-proposal':xrProposalCursor+=1;armedReview=null;break;
+      case 'prev-artifact':xrArtifactCursor=Math.max(0,xrArtifactCursor-1);armedReview=null;break;
+      case 'next-artifact':xrArtifactCursor+=1;armedReview=null;break;
+      case 'approve':
+      case 'decline':{
+        if(!proposal){toast('No pending proposal in this pocket.');return;}
+        const key=action+':'+proposal.id+':'+world.address;
+        if(armedReview?.key!==key||armedReview.until<=Date.now()){
+          armedReview={key,action,until:Date.now()+10000};
+          toast('Confirm '+action+' of '+proposal.id+': select the same button again within 10 seconds.');
+          break;
+        }
+        armedReview=null;
+        reviewProposal(habitat,proposal.id,action);
+        appendEvent(world,'workshop','VR visitor '+(action==='approve'?'approved':'declined')+' '+proposal.id+'.');
+        persistHabitat();persist();
+        if(action==='approve')rebuild();
+        toast('Proposal '+proposal.id+' '+(action==='approve'?'approved as an exhibit concept':'declined')+'.');
+        break;
+      }
+      case 'place':{
+        if(!artifact){toast('No approved concept in this pocket.');return;}
+        selectedPlacementId=placeConcept(workbench,habitat,artifact.id,world.address).id;
+        persistWorkbench();rebuild();toast('Placed '+selectedPlacementId+' (editable concept geometry).');
+        break;
+      }
+      case 'rotate':
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        turnConcept(workbench,selectedPlacementId,1);
+        persistWorkbench();rebuild();break;
+      case 'move-left':
+      case 'move-right':
+      case 'move-forward':
+      case 'move-back':{
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        const step=action==='move-left'?[-1,0]:action==='move-right'?[1,0]:
+          action==='move-forward'?[0,-1]:[0,1];
+        moveConcept(workbench,selectedPlacementId,...step);
+        persistWorkbench();rebuild();break;
+      }
+      case 'remove':{
+        if(!selectedPlacementId)throw new Error('Select a 3D placed concept first');
+        const key='remove:'+selectedPlacementId+':'+world.address;
+        if(armedReview?.key!==key||armedReview.until<=Date.now()){
+          armedReview={key,action,until:Date.now()+10000};
+          toast('Select REMOVE again within 10 seconds to remove this placement.');
+          break;
+        }
+        armedReview=null;
+        removeConcept(workbench,selectedPlacementId);
+        selectedPlacementId=null;
+        persistWorkbench();rebuild();toast('Placement removed. Original approved idea preserved.');break;
+      }
+      default:toast('Unknown XR workshop action');return;
+    }
+  }catch(error){toast(error.message);}
+  refresh();
+}
 function emptyMessage(message){
   const node=document.createElement('div');node.className='empty-memory';node.textContent=message;return node;
 }
