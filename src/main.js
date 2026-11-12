@@ -899,3 +899,63 @@ el('stage-ori-proposal').addEventListener('click',()=>{
     el('workshop-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(error){toast(error.message);}
 });
+
+
+/* Desktop acceptance lane for the same reviewed spatial placement operations used in XR. */
+el('placement-select').addEventListener('change',value=>{
+  selectedPlacementId=value.target.value||null;
+  refreshXRConsole();
+});
+el('place-artifact').addEventListener('click',()=>{
+  try{
+    const artId=el('placement-artifact-select').value;
+    selectedPlacementId=placeConcept(workbench,habitat,artId,world.address).id;
+    persistWorkbench();rebuild();
+    toast('3D concept placement '+selectedPlacementId+' saved locally.');
+  }catch(error){toast(error.message);}
+});
+function editPlacement(action){
+  try{
+    if(!selectedPlacementId)throw new Error('Select a placed concept first');
+    if(action==='rotate')turnConcept(workbench,selectedPlacementId,1);
+    else{
+      const delta={left:[-1,0],right:[1,0],forward:[0,-1],back:[0,1]}[action];
+      if(!delta)throw new Error('Unknown placement action');
+      moveConcept(workbench,selectedPlacementId,...delta);
+    }
+    persistWorkbench();rebuild();toast('Placement updated. Export the layout for a portable backup.');
+  }catch(error){toast(error.message);}
+}
+for(const [id,action] of [
+  ['placement-left','left'],['placement-right','right'],
+  ['placement-forward','forward'],['placement-back','back'],
+  ['placement-turn','rotate']
+]){
+  el(id).addEventListener('click',()=>editPlacement(action));
+}
+el('placement-remove').addEventListener('click',()=>{
+  if(!selectedPlacementId)return;
+  if(!window.confirm('Remove this local 3D placement? Its approved concept will remain published.'))return;
+  try{
+    removeConcept(workbench,selectedPlacementId);
+    selectedPlacementId=null;
+    persistWorkbench();rebuild();toast('Placement removed; approved concept still preserved.');
+  }catch(error){toast(error.message);}
+});
+el('workbench-export').addEventListener('click',()=>{
+  downloadArchive('PhiFractalCity-workbench.json',exportWorkbench(workbench));
+  toast('Spatial workbench JSON exported. Keep your world and habitat backups separately.');
+});
+el('workbench-import').addEventListener('click',()=>el('workbench-file').click());
+el('workbench-file').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];e.target.value='';
+  if(!file)return;
+  try{
+    if(file.size>60000)throw new Error('Workbench file exceeds 60 KB.');
+    const incoming=parseWorkbench(await file.text());
+    if(!window.confirm('Replace local 3D layout from this file? Export your existing layout first.'))return;
+    workbench=incoming;
+    selectedPlacementId=null;
+    persistWorkbench();rebuild();toast('Spatial layout imported. Unlinked exhibits are retained as data but not drawn.');
+  }catch(error){toast(error.message);}
+});
