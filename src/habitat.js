@@ -55,6 +55,8 @@ export function assertValidHabitat(value) {
         !PROPOSAL_KINDS.includes(p.kind) || !isText(p.summary) ||
         !['pending', 'approved', 'declined'].includes(p.status) ||
         !['simulated', 'visitor-supplied'].includes(p.source) ||
+        (p.author === RESIDENT_ID && p.source !== 'simulated') ||
+        (p.author === 'visitor' && p.source !== 'visitor-supplied') ||
         !isAddress(p.address) || !isTime(p.time) ||
         !(p.reviewedAt === null || isTime(p.reviewedAt)))) {
     throw new Error('Invalid workshop proposals');
@@ -87,12 +89,14 @@ export function assertValidHabitat(value) {
 export function addPrivateNote(habitat, text, { source = 'visitor-supplied', address = '0' } = {}) {
   if (!isText(text) || !isAddress(address)) throw new Error('Invalid private memory');
   if (!['visitor-supplied', 'simulated'].includes(source)) throw new Error('Invalid private memory origin');
+  if (habitat.privateNotes.length >= MAX_PRIVATE_NOTES) {
+    throw new Error('Home vault full; export and archive first');
+  }
   const note = {
     id: 'n' + (++habitat.sequence), owner: RESIDENT_ID, source,
     address, text: text.trim(), time: new Date().toISOString()
   };
   habitat.privateNotes.push(note);
-  if (habitat.privateNotes.length > MAX_PRIVATE_NOTES) habitat.privateNotes.shift();
   return note;
 }
 export function proposeCreation(habitat, summary, {
@@ -103,28 +107,22 @@ export function proposeCreation(habitat, summary, {
       !['simulated', 'visitor-supplied'].includes(source) || !isAddress(address)) {
     throw new Error('Invalid creation proposal');
   }
-  if (author === RESIDENT_ID && source !== 'simulated') {
-    throw new Error('Resident cannot claim a real unverified proposal');
+  if ((author === RESIDENT_ID && source !== 'simulated') ||
+      (author === 'visitor' && source !== 'visitor-supplied')) {
+    throw new Error('Proposal author and provenance must match');
   }
   const duplicate = habitat.proposals.find(p =>
     p.status === 'pending' && p.summary === summary.trim() && p.author === author && p.address === address);
   if (duplicate) return duplicate;
+  if (habitat.proposals.length >= MAX_PROPOSALS) {
+    throw new Error('Workshop ledger full; export and archive before adding more');
+  }
   const proposal = {
     id: 'p' + (++habitat.sequence), author, source, address,
     kind, summary: summary.trim(), status: 'pending',
     time: new Date().toISOString(), reviewedAt: null
   };
   habitat.proposals.push(proposal);
-  if (habitat.proposals.length > MAX_PROPOSALS) {
-    // Preserve published provenance; never discard a proposal used by an artifact.
-    const removable = habitat.proposals.findIndex(p =>
-      !habitat.artifacts.some(a => a.proposalId === p.id));
-    if (removable === -1) {
-      habitat.proposals.pop();
-      throw new Error('Workshop ledger is full; export and archive before adding more.');
-    }
-    habitat.proposals.splice(removable, 1);
-  }
   return proposal;
 }
 export function reviewProposal(habitat, id, decision) {
