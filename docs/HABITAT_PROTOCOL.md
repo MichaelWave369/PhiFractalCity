@@ -53,8 +53,8 @@ A creation is a three-stage *record* operation:
 2. **Review**: an actual visitor approves or declines using the UI.
 3. **Publish** (approved): creates a catalog artifact with the original source and proposal ID.
 
-Publishing here does **not** create 3D geometry, edit the network, commit code, or run
-a real model. No speculative agent event is presented as a verified discovery.
+Publishing adds an inspectable **3D concept marker**, not the requested full structure.
+It does **not** edit the network, commit code, or run a real model. No speculative agent event is presented as a verified discovery.
 
 ## Privacy and security boundaries
 
@@ -89,8 +89,9 @@ their district address, public memories and world history are preserved.
 5. Submit a proposal; confirm no artifact exists before approval.
 6. Approve and decline separate proposals; check the published artifact ledger.
 7. Start Ori's build simulation; review an automatically generated proposal marked SIMULATED.
-8. Verify malformed JSON imports are rejected and original state remains intact.
-9. Test headset entry and controller targeting physically on Quest 3; log outcomes.
+8. Inspect the published concept marker in the 3D city, on desktop and with a headset controller.
+9. Verify malformed JSON imports are rejected and original state remains intact.
+10. Test headset entry and controller targeting physically on Quest 3; log outcomes.
 10. Run \`npm run check\` and confirm GitHub Actions passes.
 
 ## Integration roadmap
