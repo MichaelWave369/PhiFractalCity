@@ -784,8 +784,17 @@ function resize(){
 new ResizeObserver(resize).observe(container);
 window.addEventListener('resize',resize);
 function animate(){
-  const dt=Math.min(clock.getDelta(),.1);
-  if(!renderer.xr.isPresenting)orbit.update();
+  const rawDt=clock.getDelta();
+  const dt=Math.min(rawDt,.1);
+  if(renderer.xr.isPresenting){
+    recordFrame(qa,rawDt*1000);
+    const now=performance.now();
+    if(now-qaLastUpdatedAt>3500){
+      qaLastUpdatedAt=now;
+      if(xrTab==='qa'&&xrConsole.isVisible())refreshXRConsole();
+      renderQaUI();
+    }
+  }else orbit.update();
   moveVisitor(dt);
   const t=performance.now()/1000;
   if(crystal){crystal.rotation.y+=dt*.35;crystal.position.y=3.05+Math.sin(t*1.4)*.15;}
@@ -947,6 +956,7 @@ async function requestOri(prompt,{fromXR=false}={}){
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
   const requestedPocket=world.address;
   const transport=el('ori-transport').value;
+  if(fromXR)recordQA(qa,'model-attempt');
   modelBusy=true;
   latestModelReply=null;
   armedReview=null;
@@ -974,12 +984,14 @@ async function requestOri(prompt,{fromXR=false}={}){
         })
       : await askLocalModel({prompt,model,context});
     latestModelReply={...result,address:requestedPocket};
+    if(fromXR)recordQA(qa,'model-success');
     xrDialogueStatus='Model '+latestModelReply.model+' replied · UNVERIFIED';
     el('model-reply').textContent=latestModelReply.text;
     displayModelStatus('Received · '+latestModelReply.endpoint+' · model '+latestModelReply.model+
       ' · pocket '+latestModelReply.address+' · unverified; not saved to world memory.');
     toast('Ori replied. Read the pages and review before staging.');
   }catch(error){
+    if(fromXR)recordQA(qa,'model-error');
     latestModelReply=null;
     xrDialogueStatus=String(error.message).slice(0,115);
     el('model-reply').textContent='No usable response.';
