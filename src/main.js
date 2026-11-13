@@ -519,6 +519,7 @@ function refreshXRConsole(){
 }
 function handleXRAction(action,data){
   if(!renderer.xr.isPresenting)return;
+  recordQA(qa,'panel-action');
   const proposals=currentProposals(),artifacts=currentArtifacts();
   const proposal=proposals[xrProposalCursor],artifact=artifacts[xrArtifactCursor];
   const changeTab=tab=>{xrTab=tab;armedReview=null;};
@@ -650,10 +651,20 @@ function openZone(id){
 function goDeeper(index){
   activeZone=null;
   selectedArtifact=null;
-  try{enterPocket(world,index);persist();rebuild();toast('Entered '+world.address+'. Procedural district restored.');}
+  try{
+    enterPocket(world,index);
+    if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
+    persist();rebuild();
+    toast('Entered '+world.address+'. Procedural district restored.');
+  }
   catch(error){toast(error.message);}
 }
-function goUp(){activeZone=null;selectedArtifact=null;returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
+function goUp(){
+  activeZone=null;selectedArtifact=null;
+  returnPocket(world);
+  if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
+  persist();rebuild();toast('Returned to '+world.address+'.');
+}
 function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
@@ -714,17 +725,23 @@ for(let i=0;i<2;i++){
   visitorRig.add(controller);
   if(i===0)controller.addEventListener('squeezestart',()=>{
     if(!renderer.xr.isPresenting)return;
+    recordQA(qa,'left-grip');
     const visible=xrConsole.toggle();
+    recordQA(qa,visible?'console-open':'console-close');
     if(visible)refreshXRConsole();
+    renderQaUI();
     toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
   });
   controller.addEventListener('selectstart',()=>{
+    if(renderer.xr.isPresenting)recordQA(qa,'controller-select');
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0,0,-1).transformDirection(controller.matrixWorld);
     interact(pick(raycaster));
   });
 }
 renderer.xr.addEventListener('sessionstart',()=>{
+  recordQA(qa,'xr-enter');
+  renderQaUI();
   orbit.enabled=false;
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
@@ -733,6 +750,8 @@ renderer.xr.addEventListener('sessionstart',()=>{
   toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
+  recordQA(qa,'xr-exit');
+  renderQaUI();
   xrConsole.hide();
   visitorRig.position.set(0,0,0);
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
