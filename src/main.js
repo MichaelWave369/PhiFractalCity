@@ -17,6 +17,7 @@ import {
 } from './workbench.js';
 import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
+import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -29,6 +30,9 @@ let selectedPlacementId = null;
 let xrTab = 'proposals';
 let xrProposalCursor = 0;
 let xrArtifactCursor = 0;
+let xrPromptCursor = 0;
+let xrReplyPage = 0;
+let xrDialogueStatus = 'Pair in the 2D panel before asking from VR.';
 let armedReview = null;
 let activeZone = null;
 let selectedArtifact = null;
@@ -486,12 +490,21 @@ function refreshXRConsole(){
   const current=artifacts[xrArtifactCursor];
   const placement=workbench.placements.find(p=>p.id===selectedPlacementId&&p.address===world.address);
   const armed=armedReview&&armedReview.until>Date.now()?armedReview:null;
+  const replyPage=dialogueView(latestModelReply,xrReplyPage);
+  xrReplyPage=replyPage.index;
   xrConsole.render({
     pocket:world.address,tab:xrTab,
     proposal:proposals[xrProposalCursor]||null,
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    dialogue:{
+      prompt:promptByIndex(xrPromptCursor),
+      busy:modelBusy,status:xrDialogueStatus,
+      page:replyPage.page,pageCount:replyPage.total,
+      pageIndex:replyPage.index,model:replyPage.model,
+      armedText:armed?.action==='stage'?'CONFIRM STAGE':''
+    }
   });
 }
 function handleXRAction(action,data){
@@ -503,7 +516,33 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(data==='gallery'?'gallery':'proposals');break;
+      case 'tab':changeTab(['gallery','ori'].includes(data)?data:'proposals');break;
+      case 'prev-prompt':
+      case 'next-prompt':
+        xrPromptCursor+=(action==='next-prompt'?1:-1);
+        armedReview=null;
+        xrDialogueStatus='Ready for your next explicit question.';
+        break;
+      case 'ask-preset':
+        if(modelBusy){toast('Ori is still responding.');break;}
+        armedReview=null;
+        xrReplyPage=0;
+        void requestOri(promptByIndex(xrPromptCursor).question,{fromXR:true});
+        break;
+      case 'prev-reply':
+      case 'next-reply':
+        xrReplyPage+=action==='next-reply'?1:-1;
+        break;
+      case 'stage-reply':{
+        if(modelBusy||!latestModelReply){toast('No model response available to stage.');break;}
+        const gate=reviewGate(armedReview,'stage','p1',latestModelReply.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){toast('Press STAGE again within 10 seconds to add a pending proposal.');break;}
+        stageOriProposal();
+        xrDialogueStatus='Suggestion staged for workshop review; not published.';
+        toast('Suggestion staged. Manual workshop approval is still required.');
+        break;
+      }
       case 'prev-proposal':xrProposalCursor=Math.max(0,xrProposalCursor-1);armedReview=null;break;
       case 'next-proposal':xrProposalCursor+=1;armedReview=null;break;
       case 'prev-artifact':xrArtifactCursor=Math.max(0,xrArtifactCursor-1);armedReview=null;break;
@@ -863,14 +902,16 @@ el('bridge-disconnect').addEventListener('click',()=>{
   updateBoard();
 });
 showBridgeOptions();
-el('ask-ori').addEventListener('click',async()=>{
+async function requestOri(prompt,{fromXR=false}={}){
   if(modelBusy)return;
-  const text=el('ori-question').value;
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
   const requestedPocket=world.address;
   const transport=el('ori-transport').value;
   modelBusy=true;
   latestModelReply=null;
+  armedReview=null;
+  xrReplyPage=0;
+  xrDialogueStatus='Sending one explicit request; no private memories.';
   el('ask-ori').disabled=true;
   el('ori-transport').disabled=true;
   el('stage-ori-proposal').disabled=true;
@@ -878,23 +919,29 @@ el('ask-ori').addEventListener('click',async()=>{
     ? 'Contacting your paired HTTPS PC bridge…'
     : 'Contacting your local Ollama runtime…';
   displayModelStatus('One-shot request · only current public pocket context; no private vault.');
-  updateBoard();
+  refreshXRConsole();updateBoard();
   try{
+    // VR must use an explicitly paired service. Headset localhost is NOT the PC.
+    if(fromXR&&transport!=='bridge'){
+      throw new Error('Choose and pair the HTTPS PC bridge in the 2D panel before asking from Quest VR.');
+    }
     const context=makePublicContext(world,habitat);
     const result=transport==='bridge'
       ? await askPairedBridge({
-          prompt:text,model,context,
+          prompt,model,context,
           endpoint:el('bridge-url').value.trim(),
           token:el('bridge-token').value.trim()
         })
-      : await askLocalModel({prompt:text,model,context});
+      : await askLocalModel({prompt,model,context});
     latestModelReply={...result,address:requestedPocket};
+    xrDialogueStatus='Model '+latestModelReply.model+' replied · UNVERIFIED';
     el('model-reply').textContent=latestModelReply.text;
     displayModelStatus('Received · '+latestModelReply.endpoint+' · model '+latestModelReply.model+
       ' · pocket '+latestModelReply.address+' · unverified; not saved to world memory.');
-    toast('Ori model reply received. Review it before staging any concept.');
+    toast('Ori replied. Read the pages and review before staging.');
   }catch(error){
     latestModelReply=null;
+    xrDialogueStatus=String(error.message).slice(0,115);
     el('model-reply').textContent='No usable response.';
     displayModelStatus(error.message);
     toast(error.message);
@@ -903,26 +950,33 @@ el('ask-ori').addEventListener('click',async()=>{
     el('ask-ori').disabled=false;
     el('ori-transport').disabled=false;
     el('stage-ori-proposal').disabled=!latestModelReply;
-    updateBoard();
+    refreshXRConsole();updateBoard();
   }
-});
+}
+el('ask-ori').addEventListener('click',()=>void requestOri(el('ori-question').value));
 el('clear-ori').addEventListener('click',()=>{
   if(modelBusy){toast('Current request must complete or time out.');return;}
   latestModelReply=null;
   el('model-reply').textContent='No response yet.';
   el('stage-ori-proposal').disabled=true;
   displayModelStatus('Cleared · nothing stored in the world.');
-  updateBoard();
+  xrDialogueStatus='Reply cleared; no response stored.';
+  xrReplyPage=0;
+  armedReview=null;
+  refreshXRConsole();updateBoard();
 });
+function stageOriProposal(){
+  if(modelBusy || !latestModelReply)throw new Error('No model reply available to stage');
+  const proposal=proposeCreation(habitat,latestModelReply.text.slice(0,490),{
+    kind:'research',author:'ori-001',source:'model-generated',
+    address:latestModelReply.address,model:latestModelReply.model
+  });
+  persistHabitat();
+  return proposal;
+}
 el('stage-ori-proposal').addEventListener('click',()=>{
-  if(modelBusy || !latestModelReply)return;
   try{
-    const summary=latestModelReply.text.slice(0,490);
-    const proposal=proposeCreation(habitat,summary,{
-      kind:'research',author:'ori-001',source:'model-generated',
-      address:latestModelReply.address,model:latestModelReply.model
-    });
-    persistHabitat();
+    const proposal=stageOriProposal();
     toast('Model suggestion '+proposal.id+' staged. Human approval still required.');
     el('workshop-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(error){toast(error.message);}

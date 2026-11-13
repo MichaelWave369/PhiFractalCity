@@ -1,6 +1,6 @@
 /* Side-effect-free verification gate for potentially destructive XR actions.
  * It is a UX confirmation, not authentication or authorization. */
-const ACTIONS = new Set(['approve','decline','remove']);
+const ACTIONS = new Set(['approve','decline','remove','stage']);
 export const REVIEW_WINDOW_MS = 10000;
 
 export function reviewGate(previous, action, id, address, now = Date.now()) {
