@@ -21,7 +21,8 @@ const STATUSES = new Set(['untested','pass','fail','skip']);
 const EVENTS = new Set([
   'xr-enter','xr-exit','controller-select','left-grip','console-open','console-close',
   'pocket-travel','panel-action','model-attempt','model-success','model-error',
-  'storage-test-success','storage-test-fail'
+  'storage-test-success','storage-test-fail',
+  'teleport-aim','teleport-move','snap-turn'
 ]);
 const isFrame = x=>Number.isFinite(x)&&x>0&&x<=2000;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
