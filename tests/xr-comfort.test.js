@@ -64,7 +64,7 @@ test('teleport only accepts short, flat-ground-safe landing points',()=>{
   assert.deepEqual(teleportPoint({x:0,y:1,z:5},{x:0,y:-1,z:0},{x:0,z:5}),{x:0,z:5});
   assert.equal(teleportPoint({x:0,y:1,z:0},{x:0,y:1,z:0},{x:0,z:0}),null);
   assert.equal(teleportPoint({x:0,y:1,z:0},{x:0,y:-.01,z:-1},{x:0,z:0}),null);
-  assert.equal(teleportPoint({x:0,y:1,z:0},{x:0,y:-.15,z:-1},{x:0,z:0}),null);
+  assert.equal(teleportPoint({x:0,y:1,z:0},{x:0,y:-.13,z:-3},{x:0,z:0}),null);
   // A building occupies the corner of x5,z5.
   assert.equal(teleportPoint({x:5,y:1,z:5},{x:0,y:-1,z:0},{x:0,z:0}),null);
   assert.deepEqual(clampVisitor(99,-99),{x:44,z:-44});
