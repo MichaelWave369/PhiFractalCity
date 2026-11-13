@@ -10,7 +10,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.4</small></div></div>
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.5</small></div></div>
       <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
     </header>
     <section class="hero">
@@ -48,11 +48,24 @@
           <small class="footnote">Activity progresses only while this page is open. No unattended agents or real job dispatch.</small>
         </section>
         <section id="model-panel" class="panel model-panel">
-          <div class="panel-heading"><div><span class="eyebrow">RUNG 0.3 · OPTIONAL LOCAL INFERENCE</span><h2>Talk to Ori</h2></div><span class="mini-icon">✧</span></div>
-          <p class="muted">One question at a time using Ollama on <code>127.0.0.1:11434</code>. No requests are sent until you press Ask. This is an experimental model response, not an autonomous agent.</p>
-          <label for="local-model-name">Installed Ollama model ID</label>
+          <div class="panel-heading"><div><span class="eyebrow">RUNG 0.5 · OPT-IN INTELLIGENCE</span><h2>Talk to Ori</h2></div><span class="mini-icon">✧</span></div>
+          <p class="muted">One explicit question at a time. Use local desktop Ollama, or pair an HTTPS bridge running on your PC to connect from a Quest browser. No requests are sent until you press Ask.</p>
+          <label for="ori-transport">Inference connection</label>
+          <select id="ori-transport">
+            <option value="local">Local Ollama (desktop only)</option>
+            <option value="bridge">Paired HTTPS LAN bridge (experimental)</option>
+          </select>
+          <div class="paired-settings" id="paired-settings" hidden>
+            <label for="bridge-url">PC bridge address · HTTPS private network only</label>
+            <input id="bridge-url" type="url" value="" placeholder="https://192.168.1.50:8765/v1/chat" autocomplete="off" spellcheck="false"/>
+            <label class="spaced-label" for="bridge-token">Pairing token from your PC bridge terminal</label>
+            <input id="bridge-token" type="password" value="" maxlength="64" placeholder="64 lowercase hexadecimal characters" autocomplete="off" spellcheck="false"/>
+            <div class="button-row"><button id="bridge-disconnect" class="button secondary">Forget pairing token</button></div>
+            <small class="footnote">Token exists only in this open page. A trusted HTTPS certificate, exact browser origin approval, and local-network access permission are required. Never expose Ollama itself to your LAN.</small>
+          </div>
+          <label class="spaced-label" for="local-model-name">Installed Ollama model ID</label>
           <input id="local-model-name" type="text" value="qwen3:4b" maxlength="80" spellcheck="false" autocomplete="off" aria-describedby="local-model-hint"/>
-          <small id="local-model-hint" class="footnote">Works only when this browser can reach your own Ollama service and its origin is permitted. On Quest, localhost refers to the headset, not your PC.</small>
+          <small id="local-model-hint" class="footnote">Local mode uses your current device. On Quest, choose an explicitly paired PC bridge, not localhost.</small>
           <label class="spaced-label" for="ori-question">Ask about the current public pocket</label>
           <textarea id="ori-question" maxlength="500" rows="3" placeholder="What could we build in this neighborhood?"></textarea>
           <p class="muted">Sends your question, this pocket address, up to four public notes and four approved concepts. <strong>Never the home vault or unapproved proposals.</strong></p>

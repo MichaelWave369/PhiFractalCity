@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.4 candidate. Rungs 0.1–0.3 and the Pages deployment repair are merged. The experimental **VR workshop console and spatial workbench** are under review. Quest 3 hardware acceptance and secure headset-to-PC inference are pending.
+> **Status:** Rung 0.5 candidate. Rungs 0.1–0.4 and the Pages deployment repair are merged and published. An opt-in, authenticated **HTTPS LAN bridge to PC Ollama** is in PR review. Quest 3 hardware acceptance, TLS trust, and cross-device inference are not verified.
 
 ## Vision
 
@@ -34,13 +34,21 @@ A hard-coded loopback Ollama adapter (`127.0.0.1:11434`) enables **one question 
 
 **Why Ollama first?** PhiStream is an experimental memory-tiered token-ID research engine, not yet a general HTTP chat API. See [Local inference setup, CORS, privacy, and Quest limitations](docs/LOCAL_INFERENCE.md). This integration is a bridge for desktop use, not a claim of a working local-model VR session.
 
-## Rung 0.4 candidate: In-world workshop
+## Rung 0.4: In-world workshop
 
 The experimental WebXR workshop console can browse pending proposals and approved concepts, review with an explicit two-step confirmation, and place or edit geometric exhibit markers. A desktop spatial-workbench panel uses the same versioned layout records. Every placement remains a **local, reversible concept visualization**, not actual construction, a repository write, or online multiplayer.
 
 The app has **three independent JSON backups**: world, habitat, and workbench. All must be exported for a complete archive. In-headset text entry, model access from Quest, secure synchronization, and physical Quest acceptance remain pending.
 
 See [R0.4 XR Workshop Guide](docs/VR_WORKSHOP_R04.md) for input controls, trust boundaries, and a manual test checklist.
+
+## Rung 0.5 candidate: Paired local intelligence bridge
+
+An optional **operator-started HTTPS Node.js bridge** can forward one user-requested chat query to local PC Ollama with a random per-start bearer pairing token, exact browser-origin CORS, loopback-only upstream and bounded public pocket context. Its target is not cloud-hosted, and the browser does not save the pairing token.
+
+**This is not a verified Quest-to-PC solution yet.** Real use requires a certificate trusted on the headset, browser Local Network Access permission, LAN reachability and manual hardware testing. We do not enable wildcard CORS or expose Ollama to the LAN. See [R0.5 Bridge Setup and Security](docs/BRIDGE_R05.md).
+
+The model is still a one-shot text assistant, not an unattended autonomous agent. VR-native typing, two-way speech and shared multiuser state are not included.
 
 ## Run locally
 

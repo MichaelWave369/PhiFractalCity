@@ -100,3 +100,11 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 #workbench-panel{background:linear-gradient(140deg,#15263c,#111a2c)}
 #workbench-panel .button:disabled{opacity:.38;cursor:not-allowed}
 #workbench-panel .footnote{margin-top:13px}
+
+/* R0.5: explicit bridge pairing, never saved to browser storage */
+.paired-settings{display:flex;flex-direction:column;gap:6px;background:#0c182b;padding:13px;border:1px solid #395472;border-radius:9px;margin:12px 0}
+.paired-settings[hidden]{display:none}
+.paired-settings input[type="url"],.paired-settings input[type="password"]{width:100%;min-width:0;padding:11px;background:#080f20;border:1px solid #3e5678;border-radius:7px;color:#deebff;font:inherit;font-size:11px}
+.paired-settings .button-row{margin-top:4px}
+.paired-settings .footnote{margin:5px 0 0}
+#ori-transport{margin-bottom:4px}
