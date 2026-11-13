@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.8 candidate. Rungs 0.1–0.7 have merged and published. Optional Quest locomotion, snap turning and recenterable VR console are in review. Physical Quest 3 comfort, controller mappings, and paired PC model connectivity still require manual acceptance.
+> **Status:** Rung 0.9 candidate. Rungs 0.1–0.8 are merged and deployed. Collision-aware walking, shared teleport footprints and deterministic pedestrian route previews are in review. Quest 3 hardware acceptance and real bridge connectivity still require manual testing.
 
 ## Vision
 
@@ -64,11 +64,19 @@ A fourth tab in the floating WebXR console enables a **manual eight-point headse
 
 A green build is not evidence of real Quest 3 acceptance. A visitor must perform and mark the tests in the headset; all marks start **untested**. See [Quest Field Lab acceptance guide](docs/QUEST_FIELD_LAB_R07.md).
 
-## Rung 0.8 candidate: Visitor comfort and movement
+## Rung 0.8: Visitor comfort and movement
 
 The **MOVE** tab and 2D **Quest comfort** panel provide teleport-only locomotion by default, opt-in smooth walking, bounded speeds, 30°/45° snap turning or off, and a visitor-invoked console recenter. Right grip aims a visible flat-ground teleport marker; release commits only safe, in-range destinations. These visitor preferences are stored independently of the world, habitat, workbench and private agent memories.
 
 No hardware verification is claimed; these are experimental WebXR mappings without full collision physics or guardian integration. See [R0.8 Quest Comfort Guide](docs/QUEST_COMFORT_R08.md).
+
+## Rung 0.9 candidate: Walkable City Pathways
+
+Building walls and roofs are slightly narrower to create genuine pedestrian corridors. A single deterministic obstacle model now protects **both** smooth movement and right-grip teleport from modeled towers, public landmarks and approved concept placements. A bounded path planner creates an optional glowing **route preview** to the home, workshop, Commons and memory area without moving the visitor or any agent.
+
+The desktop **District pathways** panel and VR **MOVE** tab let visitors choose destinations, display a route and clear it. Pocket changes reset the XR arrival position to a known open road. These are still simplified flat-ground collisions, not full VR physics or physical Quest certification. No existing world/habitat/workbench schema changes were needed.
+
+See [R0.9 Navigation and Quest Acceptance Guide](docs/NAVIGATION_R09.md).
 
 ## Run locally
 

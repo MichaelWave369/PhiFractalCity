@@ -21,8 +21,11 @@ import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
 import {
   defaultComfort,loadComfort,saveComfort,validateComfort,cycleComfort,readStick,
-  snapTurnRequest,smoothDelta,teleportPoint,clampVisitor
+  snapTurnRequest,smoothDelta,clampVisitor
 } from './xr-comfort.js';
+import {
+  createNavigationMap,resolveMotion,safeTeleport,routeDestinations,planPath
+} from './navigation.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -51,6 +54,12 @@ let xrTeleportHeld = false;
 let xrTeleportTarget = null;
 let xrRightController = null;
 let pendingConsoleDock = false;
+let navigationMap = null;
+let routeOverlay = null;
+let activeRouteId = null;
+let routeSummary = null;
+let selectedRouteId = 'home';
+let lastBlockedRecord = -Infinity;
 let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
@@ -156,6 +165,7 @@ function buildGround() {
   }
 }
 function buildBuildings(district) {
+  // Pedestrian-sized gaps between deterministic towers are essential for walkable paths.
   const palette=['#263a61','#273955','#302b54','#274c60'];
   const trims=mat('#58618c',{emissive:'#1a2259',emissiveIntensity:.5});
   const lights=[
@@ -164,10 +174,10 @@ function buildBuildings(district) {
   ];
   for(const building of district.buildings){
     const {x,z,height,style}=building;
-    cube(3.5,height,3.5,mat(palette[style],{emissive:'#0a1930',emissiveIntensity:.22}),x,height/2+.6,z);
-    cube(3.8,.18,3.8,trims,x,height+.7,z);
+    cube(2.5,height,2.5,mat(palette[style],{emissive:'#0a1930',emissiveIntensity:.22}),x,height/2+.6,z);
+    cube(2.8,.18,2.8,trims,x,height+.7,z);
     for(let j=0;j<Math.floor(height/2.2)+1;j++){
-      cube(1.1,.35,.035,lights[j%3===0?0:1],x,1.2+j*1.9,z+1.77);
+      cube(1.1,.35,.035,lights[j%3===0?0:1],x,1.2+j*1.9,z+1.27);
     }
   }
 }
@@ -367,7 +377,11 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
+  navigationMap=createNavigationMap(district,workbench.placements);
+  routeOverlay=null;
+  routeSummary=null;
   buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildWorkbenchPlacements();buildBoard();
+  if(activeRouteId)previewRoute({silent:true});
   updateUI();
 }
 function toast(message){
@@ -411,6 +425,7 @@ function updateUI(){
   }
   renderHabitat();
   renderWorkbenchUI();
+  renderRouteUI();
   refreshXRConsole();
   el('stage-ori-proposal').disabled = !latestModelReply || modelBusy;
   const list=el('memory-list');list.replaceChildren();
@@ -521,6 +536,12 @@ function refreshXRConsole(){
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
     comfort,
+    route:(()=>{
+      const choices=routeDestinations(world.address);
+      const choice=choices.find(x=>x.id===selectedRouteId)||choices[0];
+      return {name:choice.name,active:activeRouteId===choice.id,
+        distance:routeSummary?.distance??null};
+    })(),
     qa:{
       ...summarizeQA(qa),
       checkIndex:qaCheckCursor,
@@ -552,6 +573,19 @@ function handleXRAction(action,data){
       case 'cycle-speed':updateComfort(cycleComfort(comfort,'speed'));break;
       case 'cycle-panel':updateComfort(cycleComfort(comfort,'panelDistance'));pendingConsoleDock=true;break;
       case 'recenter-panel':pendingConsoleDock=true;toast('Panel will be recentered to your current headset direction.');break;
+      case 'route-next':{
+        const choices=routeDestinations(world.address);
+        const at=choices.findIndex(x=>x.id===selectedRouteId);
+        selectedRouteId=choices[(at+1+choices.length)%choices.length].id;
+        clearRoutePreview({silent:true});
+        renderRouteUI();
+        toast('Destination selected: '+choices.find(x=>x.id===selectedRouteId).name);
+        break;
+      }
+      case 'route-toggle':
+        if(activeRouteId===selectedRouteId)clearRoutePreview();
+        else previewRoute();
+        break;
       case 'prev-check':
       case 'next-check':
         qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
@@ -648,6 +682,105 @@ function handleXRAction(action,data){
 }
 
 
+
+function recordBlockedMovement(){
+  const now=performance.now();
+  if(now-lastBlockedRecord>1500){
+    lastBlockedRecord=now;
+    recordQA(qa,'collision-blocked');
+  }
+}
+function clearRouteOverlay(){
+  if(!routeOverlay)return;
+  districtRoot.remove(routeOverlay);
+  routeOverlay.traverse(obj=>{
+    obj.geometry?.dispose();
+    const mats=obj.material?(Array.isArray(obj.material)?obj.material:[obj.material]):[];
+    mats.forEach(m=>m.dispose());
+  });
+  routeOverlay=null;
+}
+function renderRouteUI(){
+  const select=el('route-destination');
+  const choices=routeDestinations(world.address);
+  if(!choices.some(x=>x.id===selectedRouteId))selectedRouteId=choices[0].id;
+  select.replaceChildren();
+  for(const item of choices){
+    const option=document.createElement('option');
+    option.value=item.id;option.textContent=item.name;
+    select.append(option);
+  }
+  select.value=selectedRouteId;
+  const active=Boolean(routeSummary&&activeRouteId===selectedRouteId);
+  el('route-clear').disabled=!active;
+  const status=el('route-status');
+  status.textContent=active
+    ?'Preview: '+routeSummary.distance.toFixed(1)+' m, '+routeSummary.waypoints.length+
+      ' points. Route generated from your position at request time.'
+    :'No active route. On desktop, the preview starts from the VR arrival point.';
+}
+function clearRoutePreview({silent=false}={}){
+  clearRouteOverlay();
+  activeRouteId=null;
+  routeSummary=null;
+  renderRouteUI();
+  if(!silent)toast('Route preview cleared. No saved world data changed.');
+}
+function visitorRouteOrigin(){
+  const pose=renderer.xr.isPresenting?xrHeadPose()?.pos:null;
+  return pose?{x:pose.x,z:pose.z}:{x:0,z:16};
+}
+function previewRoute({silent=false}={}){
+  clearRouteOverlay();
+  const choices=routeDestinations(world.address);
+  const choice=choices.find(x=>x.id===selectedRouteId)||choices[0];
+  selectedRouteId=choice.id;
+  const origin=visitorRouteOrigin();
+  const planned=planPath(navigationMap,origin,{x:choice.x,z:choice.z});
+  if(!planned){
+    activeRouteId=null;routeSummary=null;
+    renderRouteUI();
+    if(!silent)toast('No safe route found. Move to an open road and try again.');
+    recordQA(qa,'route-unreachable');
+    return false;
+  }
+  activeRouteId=choice.id;
+  routeSummary=planned;
+  const overlay=new THREE.Group();
+  const points=planned.waypoints.map(p=>new THREE.Vector3(p.x,.18,p.z));
+  const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({color:0x5bebc7,transparent:true,opacity:.9,depthTest:true}));
+  overlay.add(line);
+  const finish=planned.waypoints.at(-1);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.65,.82,32),
+    new THREE.MeshBasicMaterial({color:0x7bead3,side:THREE.DoubleSide,transparent:true,opacity:.9}));
+  ring.rotation.x=-Math.PI/2;
+  ring.position.set(finish.x,.22,finish.z);
+  overlay.add(ring);
+  for(const p of planned.waypoints.slice(1,-1)){
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(.14,8,8),
+      new THREE.MeshBasicMaterial({color:0x8fffe9}));
+    orb.position.set(p.x,.23,p.z);overlay.add(orb);
+  }
+  routeOverlay=overlay;districtRoot.add(routeOverlay);
+  renderRouteUI();
+  recordQA(qa,'route-preview');
+  if(!silent)toast('Walkable path to '+choice.name+': '+planned.distance.toFixed(1)+' m. Preview only.');
+  return true;
+}
+el('route-destination').addEventListener('change',()=>{
+  selectedRouteId=el('route-destination').value;
+  clearRoutePreview({silent:true});
+  refreshXRConsole();
+});
+el('route-preview').addEventListener('click',()=>{
+  previewRoute();
+  refreshXRConsole();
+});
+el('route-clear').addEventListener('click',()=>{
+  clearRoutePreview();
+  refreshXRConsole();
+});
 function renderComfortUI(){
   el('comfort-movement').value=comfort.locomotion;
   el('comfort-turn').value=comfort.turn;
@@ -721,7 +854,7 @@ function refreshTeleportTarget(){
   xrRightController.updateWorldMatrix(true,false);
   const origin=new THREE.Vector3().setFromMatrixPosition(xrRightController.matrixWorld);
   const direction=new THREE.Vector3(0,0,-1).transformDirection(xrRightController.matrixWorld);
-  const result=teleportPoint(origin,direction,pose.pos);
+  const result=safeTeleport(navigationMap,origin,direction,pose.pos);
   if(!result)return;
   xrTeleportTarget=result;
   teleportMarker.position.set(result.x,.07,result.z);
@@ -737,10 +870,15 @@ function commitTeleport(){
   const pose=xrHeadPose();
   if(!pose)return;
   // Move the headset's actual horizontal world position to the chosen ground point.
-  const next=clampVisitor(
-    visitorRig.position.x+target.x-pose.pos.x,
-    visitorRig.position.z+target.z-pose.pos.z
-  );
+  const intended={
+    x:visitorRig.position.x+target.x-pose.pos.x,
+    z:visitorRig.position.z+target.z-pose.pos.z
+  };
+  const next=clampVisitor(intended.x,intended.z);
+  if(Math.hypot(next.x-intended.x,next.z-intended.z)>.001){
+    toast('Landing exceeds calibrated district limits. Choose another ground target.');
+    return;
+  }
   visitorRig.position.x=next.x;
   visitorRig.position.z=next.z;
   recordQA(qa,'teleport-move');
@@ -782,7 +920,12 @@ function updateXRComfort(dt){
   const forward=xrHeadPose()?.forward;
   if(!forward)return;
   const movement=smoothDelta(left,forward,dt,comfort.speed);
-  const next=clampVisitor(visitorRig.position.x+movement.x,visitorRig.position.z+movement.z);
+  const pose=xrHeadPose()?.pos;
+  if(!pose||!navigationMap)return;
+  const result=resolveMotion(navigationMap,{x:pose.x,z:pose.z},movement);
+  if(result.blocked)recordBlockedMovement();
+  const dx=result.position.x-pose.x,dz=result.position.z-pose.z;
+  const next=clampVisitor(visitorRig.position.x+dx,visitorRig.position.z+dz);
   visitorRig.position.x=next.x;
   visitorRig.position.z=next.z;
 }
@@ -872,7 +1015,8 @@ function openZone(id){
   el('zone-description').textContent=zone.label+' · '+zone.description;
   if(world.address!=='0'){
     world.address='0';appendEvent(world,'travel','Visitor returned to the resident district.');
-    persist();rebuild();
+    activeRouteId=null;routeSummary=null;
+    persist();rebuild();resetVisitorAfterPocketChange();
   }
   renderHabitat();updateBoard();
   toast('Entered '+zone.label+'. '+(id==='workshop'?'Review proposals in the workshop panel.':'Local world state remains persistent.'));
@@ -881,22 +1025,36 @@ function openZone(id){
     el(target).scrollIntoView({behavior:'smooth',block:'nearest'});
   }
 }
+
+function resetVisitorAfterPocketChange(){
+  if(!renderer.xr.isPresenting)return;
+  const pose=xrHeadPose();
+  if(pose){
+    visitorRig.position.x-=pose.pos.x;
+    visitorRig.position.z+=16-pose.pos.z;
+  }else visitorRig.position.set(0,0,16);
+  xrTeleportHeld=false;xrTeleportTarget=null;teleportMarker.visible=false;
+  pendingConsoleDock=true;
+}
 function goDeeper(index){
   activeZone=null;
   selectedArtifact=null;
+  activeRouteId=null;routeSummary=null;
   try{
     enterPocket(world,index);
     if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
-    persist();rebuild();
-    toast('Entered '+world.address+'. Procedural district restored.');
+    persist();rebuild();resetVisitorAfterPocketChange();
+    toast('Entered '+world.address+'. Visitor arrival reset to a walkable road.');
   }
   catch(error){toast(error.message);}
 }
 function goUp(){
   activeZone=null;selectedArtifact=null;
+  activeRouteId=null;routeSummary=null;
   returnPocket(world);
   if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
-  persist();rebuild();toast('Returned to '+world.address+'.');
+  persist();rebuild();resetVisitorAfterPocketChange();
+  toast('Returned to '+world.address+'. Arrival reset in VR.');
 }
 function interact(hit){
   if(!hit)return;
@@ -1077,9 +1235,9 @@ rebuild();resize();renderer.setAnimationLoop(animate);
 
 el('up-btn').addEventListener('click',goUp);
 el('home-btn').addEventListener('click',()=>{
-  activeZone=null;
+  activeZone=null;activeRouteId=null;routeSummary=null;
   world.address='0';appendEvent(world,'travel','Visitor returned to District Zero.');
-  persist();rebuild();toast('Welcome to District Zero.');
+  persist();rebuild();resetVisitorAfterPocketChange();toast('Welcome to District Zero.');
 });
 el('add-note').addEventListener('click',()=>{
   try{
@@ -1113,12 +1271,14 @@ el('import-file').addEventListener('change',async e=>{
     if(file.size>300000)throw new Error('World file exceeds 300 KB.');
     const imported=parseWorld(await file.text());
     if(!window.confirm('Replace local world with this archive? Export first if needed.'))return;
-    activeZone=null;world=imported;persist();rebuild();toast('World archive imported.');
+    activeZone=null;activeRouteId=null;routeSummary=null;
+    world=imported;persist();rebuild();resetVisitorAfterPocketChange();toast('World archive imported.');
   }catch(error){toast(error.message);}
 });
 el('reset-btn').addEventListener('click',()=>{
   if(!window.confirm('Permanently reset this local world? Export your memories first.'))return;
-  activeZone=null;world=makeWorld();persist();rebuild();toast('District Zero reset; resident habitat preserved.');
+  activeZone=null;activeRouteId=null;routeSummary=null;
+  world=makeWorld();persist();rebuild();resetVisitorAfterPocketChange();toast('District Zero reset; resident habitat preserved.');
 });
 
 

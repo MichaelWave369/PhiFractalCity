@@ -10,7 +10,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.8</small></div></div>
+      <div class="brand"><span class="brand-mark">Φ</span><div><strong>FRACTAL CITY</strong><small>THE AGENT COMMONS / RUNG 0.9</small></div></div>
       <div class="top-actions"><span class="pill"><span class="status-dot"></span> LOCAL WORLD</span><span class="pill hide-mobile">NO CLOUD ACCOUNT</span><a class="link" href="https://github.com/MichaelWave369/PhiFractalCity" target="_blank" rel="noopener noreferrer">GITHUB REPO ↗</a></div>
     </header>
     <section class="hero">
@@ -29,7 +29,7 @@
           <div class="controls-hint"><b>EXPLORE</b><span>Drag to orbit · Scroll to zoom · Select glowing landmarks</span><span>Quest: left grip console · right grip teleport · right stick snap turn</span></div>
           <div id="scene-toast" role="status" aria-live="polite">Select a glowing pocket portal to travel deeper.</div>
         </div>
-        <div class="scene-footer"><span>DETERMINISTIC GEOMETRY</span><span>WEBXR ENTRY · QUEST TEST PENDING</span></div>
+        <div class="scene-footer"><span>WALKABLE GEOMETRY · PATH PREVIEWS</span><span>WEBXR ENTRY · QUEST TEST PENDING</span></div>
       </section>
       <aside class="sidebar">
         <section class="panel">
@@ -74,6 +74,15 @@
           <div id="model-reply" class="model-reply" aria-live="polite">No response yet.</div>
           <button id="stage-ori-proposal" class="button secondary full" disabled>+ Stage reply as proposal for review</button>
           <small class="footnote">Model text is unverified. Staging requires a click; publishing requires a separate approval. No tools, code execution, or background requests.</small>
+        </section>
+        <section id="pathways-panel" class="panel">
+          <div class="panel-heading"><div><span class="eyebrow">RUNG 0.9 · WALKABLE PATHS</span><h2>District pathways</h2></div><span class="mini-icon">⌁</span></div>
+          <p class="muted">Preview a pedestrian route through the current district. Routes avoid modeled building roofs, the central pedestal, key landmarks and placed concept exhibits.</p>
+          <label for="route-destination">Choose a public destination</label>
+          <select id="route-destination"></select>
+          <div class="button-row"><button id="route-preview" class="button primary">Show walkable path</button><button id="route-clear" class="button secondary">Clear path</button></div>
+          <p class="route-status" id="route-status" role="status" aria-live="polite">Choose a destination to preview a path.</p>
+          <p class="footnote">On desktop, routes start from the VR arrival point. In Quest, they start from your current headset position when you request them. The glowing line is a planning aid, not automatic locomotion. Use MOVE in VR to change destinations or toggle the preview. Collision is approximate; physical guardian boundaries remain the headset's responsibility.</p>
         </section>
         <section id="comfort-panel" class="panel">
           <div class="panel-heading"><div><span class="eyebrow">RUNG 0.8 · VISITOR ACCESSIBILITY</span><h2>Quest comfort</h2></div><span class="mini-icon">◎</span></div>

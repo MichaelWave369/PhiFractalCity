@@ -190,10 +190,10 @@ export function createXRConsole(THREE, rig) {
       button('PANEL DISTANCE · '+(comfort.panelDistance||1.8)+' m',
         'cycle-panel',null,0,-.317,.93,.094,palette.primary);
       button('RECENTER FLOATING PANEL','recenter-panel',null,0,-.424,.93,.095,palette.accent);
-      label('TELEPORT AVAILABLE IN BOTH MODES',-.47,-.54,.91,.062,
-        {size:26,color:'#a9c5e9'});
-      label('NO COLLISION PHYSICS · QA REQUIRED',-.47,-.6,.91,.059,
-        {size:25,color:'#e6bd87'});
+      label('DEST · '+(state.route?.name||'Select destination'),-.47,-.504,.91,.059,
+        {size:25,color:'#b4ecdf'});
+      button('NEXT DEST','route-next',null,-.238,-.568,.455,.075,palette.primary);
+      button(state.route?.active?'HIDE PATH':'SHOW PATH','route-toggle',null,.238,-.568,.455,.075,palette.accent);
     }
     button('CLOSE · LEFT GRIP TO REOPEN','close',null,0,-.667,.93,.066,palette.muted);
     label('ONE-SHOT REQUESTS · NO AUTO-PUBLISH',-.47,-.722,.92,.03,{size:20,color:palette.soft});
