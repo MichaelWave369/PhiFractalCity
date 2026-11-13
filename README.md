@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.7 candidate. Rungs 0.1–0.6 are merged and published. The **Quest Field Lab** is under review to capture manual headset acceptance, XR controller events and approximate JS frame timing. Real Quest 3, TLS and cross-device model behavior are still not independently verified.
+> **Status:** Rung 0.8 candidate. Rungs 0.1–0.7 have merged and published. Optional Quest locomotion, snap turning and recenterable VR console are in review. Physical Quest 3 comfort, controller mappings, and paired PC model connectivity still require manual acceptance.
 
 ## Vision
 
@@ -58,11 +58,17 @@ The Quest must first pair with the **R0.5 HTTPS bridge using the browser's 2D in
 
 See [R0.6 XR Conversation & Quest Acceptance Guide](docs/XR_DIALOGUE_R06.md).
 
-## Rung 0.7 candidate: Quest Field Lab
+## Rung 0.7: Quest Field Lab
 
 A fourth tab in the floating WebXR console enables a **manual eight-point headset acceptance checklist** and a bounded session-only diagnostic view. The normal browser sidebar mirrors these tests and allows an explicit, privacy-redacted JSON export. No browser fingerprint, pairing token, private memory, model reply, or raw action payload enters the report. No analytics or network upload is performed.
 
 A green build is not evidence of real Quest 3 acceptance. A visitor must perform and mark the tests in the headset; all marks start **untested**. See [Quest Field Lab acceptance guide](docs/QUEST_FIELD_LAB_R07.md).
+
+## Rung 0.8 candidate: Visitor comfort and movement
+
+The **MOVE** tab and 2D **Quest comfort** panel provide teleport-only locomotion by default, opt-in smooth walking, bounded speeds, 30°/45° snap turning or off, and a visitor-invoked console recenter. Right grip aims a visible flat-ground teleport marker; release commits only safe, in-range destinations. These visitor preferences are stored independently of the world, habitat, workbench and private agent memories.
+
+No hardware verification is claimed; these are experimental WebXR mappings without full collision physics or guardian integration. See [R0.8 Quest Comfort Guide](docs/QUEST_COMFORT_R08.md).
 
 ## Run locally
 
