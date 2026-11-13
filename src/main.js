@@ -17,6 +17,7 @@ import {
 } from './workbench.js';
 import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
+import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -29,6 +30,9 @@ let selectedPlacementId = null;
 let xrTab = 'proposals';
 let xrProposalCursor = 0;
 let xrArtifactCursor = 0;
+let xrPromptCursor = 0;
+let xrReplyPage = 0;
+let xrDialogueStatus = 'Pair in the 2D panel before asking from VR.';
 let armedReview = null;
 let activeZone = null;
 let selectedArtifact = null;
@@ -486,12 +490,21 @@ function refreshXRConsole(){
   const current=artifacts[xrArtifactCursor];
   const placement=workbench.placements.find(p=>p.id===selectedPlacementId&&p.address===world.address);
   const armed=armedReview&&armedReview.until>Date.now()?armedReview:null;
+  const replyPage=dialogueView(latestModelReply,xrReplyPage);
+  xrReplyPage=replyPage.index;
   xrConsole.render({
     pocket:world.address,tab:xrTab,
     proposal:proposals[xrProposalCursor]||null,
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    dialogue:{
+      prompt:promptByIndex(xrPromptCursor),
+      busy:modelBusy,status:xrDialogueStatus,
+      page:replyPage.page,pageCount:replyPage.total,
+      pageIndex:replyPage.index,model:replyPage.model,
+      armedText:armed?.action==='stage'?'CONFIRM STAGE':''
+    }
   });
 }
 function handleXRAction(action,data){
@@ -503,7 +516,33 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(data==='gallery'?'gallery':'proposals');break;
+      case 'tab':changeTab(['gallery','ori'].includes(data)?data:'proposals');break;
+      case 'prev-prompt':
+      case 'next-prompt':
+        xrPromptCursor+=(action==='next-prompt'?1:-1);
+        armedReview=null;
+        xrDialogueStatus='Ready for your next explicit question.';
+        break;
+      case 'ask-preset':
+        if(modelBusy){toast('Ori is still responding.');break;}
+        armedReview=null;
+        xrReplyPage=0;
+        void requestOri(promptByIndex(xrPromptCursor).question,{fromXR:true});
+        break;
+      case 'prev-reply':
+      case 'next-reply':
+        xrReplyPage+=action==='next-reply'?1:-1;
+        break;
+      case 'stage-reply':{
+        if(modelBusy||!latestModelReply){toast('No model response available to stage.');break;}
+        const gate=reviewGate(armedReview,'stage','p1',latestModelReply.address);
+        armedReview=gate.armed;
+        if(!gate.confirmed){toast('Press STAGE again within 10 seconds to add a pending proposal.');break;}
+        stageOriProposal();
+        xrDialogueStatus='Suggestion staged for workshop review; not published.';
+        toast('Suggestion staged. Manual workshop approval is still required.');
+        break;
+      }
       case 'prev-proposal':xrProposalCursor=Math.max(0,xrProposalCursor-1);armedReview=null;break;
       case 'next-proposal':xrProposalCursor+=1;armedReview=null;break;
       case 'prev-artifact':xrArtifactCursor=Math.max(0,xrArtifactCursor-1);armedReview=null;break;
