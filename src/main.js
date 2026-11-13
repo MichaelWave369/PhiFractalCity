@@ -10,6 +10,7 @@ import {
   exportHabitat, addPrivateNote, proposeCreation, reviewProposal
 } from './habitat.js';
 import { askLocalModel, makePublicContext, DEFAULT_LOCAL_MODEL } from './inference.js';
+import { askPairedBridge } from './bridge-client.js';
 import {
   makeWorkbench, loadWorkbench, saveWorkbench, parseWorkbench, exportWorkbench,
   placeConcept, moveConcept, turnConcept, removeConcept
@@ -844,26 +845,53 @@ el('habitat-reset').addEventListener('click',()=>{
 function displayModelStatus(message){
   el('model-state').textContent=message;
 }
+function showBridgeOptions(){
+  const paired=el('ori-transport').value==='bridge';
+  el('paired-settings').hidden=!paired;
+  if(!modelBusy)displayModelStatus(paired
+    ? 'Paired HTTPS LAN mode · no connection until Ask is pressed.'
+    : 'Local Ollama mode · no connection until Ask is pressed.');
+}
+el('ori-transport').addEventListener('change',showBridgeOptions);
+el('bridge-disconnect').addEventListener('click',()=>{
+  if(modelBusy){toast('Request in progress; pairing cannot be changed.');return;}
+  el('bridge-token').value='';
+  latestModelReply=null;
+  el('model-reply').textContent='No response yet.';
+  el('stage-ori-proposal').disabled=true;
+  displayModelStatus('Pairing token forgotten for this page session.');
+  updateBoard();
+});
+showBridgeOptions();
 el('ask-ori').addEventListener('click',async()=>{
   if(modelBusy)return;
   const text=el('ori-question').value;
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
   const requestedPocket=world.address;
+  const transport=el('ori-transport').value;
   modelBusy=true;
   latestModelReply=null;
   el('ask-ori').disabled=true;
+  el('ori-transport').disabled=true;
   el('stage-ori-proposal').disabled=true;
-  el('model-reply').textContent='Contacting your local Ollama runtime…';
-  displayModelStatus('One-shot request · sending only selected public context.');
+  el('model-reply').textContent=transport==='bridge'
+    ? 'Contacting your paired HTTPS PC bridge…'
+    : 'Contacting your local Ollama runtime…';
+  displayModelStatus('One-shot request · only current public pocket context; no private vault.');
   updateBoard();
   try{
-    const result=await askLocalModel({
-      prompt:text,model,context:makePublicContext(world,habitat)
-    });
+    const context=makePublicContext(world,habitat);
+    const result=transport==='bridge'
+      ? await askPairedBridge({
+          prompt:text,model,context,
+          endpoint:el('bridge-url').value.trim(),
+          token:el('bridge-token').value.trim()
+        })
+      : await askLocalModel({prompt:text,model,context});
     latestModelReply={...result,address:requestedPocket};
     el('model-reply').textContent=latestModelReply.text;
-    displayModelStatus('Received · model '+latestModelReply.model+
-      ' · pocket '+latestModelReply.address+' · one-shot, unverified; not saved to world memory.');
+    displayModelStatus('Received · '+latestModelReply.endpoint+' · model '+latestModelReply.model+
+      ' · pocket '+latestModelReply.address+' · unverified; not saved to world memory.');
     toast('Ori model reply received. Review it before staging any concept.');
   }catch(error){
     latestModelReply=null;
@@ -873,6 +901,7 @@ el('ask-ori').addEventListener('click',async()=>{
   }finally{
     modelBusy=false;
     el('ask-ori').disabled=false;
+    el('ori-transport').disabled=false;
     el('stage-ori-proposal').disabled=!latestModelReply;
     updateBoard();
   }
