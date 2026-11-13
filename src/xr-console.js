@@ -74,12 +74,14 @@ export function createXRConsole(THREE, rig) {
   function render(state){
     clear();
     rectangle(1.02,1.48,0,0,-.01,palette.bg);
-    label('Φ WORKSHOP / XR CONSOLE',-.47,.655,.92,.105,{size:37,color:'#82e0da'});
+    label('Φ CITY / XR CONSOLE',-.47,.655,.92,.105,{size:37,color:'#82e0da'});
     label('POCKET '+state.pocket,-.47,.565,.92,.075,{size:30,color:palette.soft});
-    button('PROPOSALS','tab','proposals',-.236,.454,.455,.105,
+    button('PROPOSALS','tab','proposals',-.316,.454,.30,.105,
       state.tab==='proposals'?palette.accent:palette.muted);
-    button('EXHIBITS','tab','gallery',.236,.454,.455,.105,
+    button('EXHIBITS','tab','gallery',0,.454,.30,.105,
       state.tab==='gallery'?palette.accent:palette.muted);
+    button('TALK TO ORI','tab','ori',.316,.454,.30,.105,
+      state.tab==='ori'?palette.accent:palette.muted);
     if(state.tab==='proposals'){
       const item=state.proposal;
       label('PENDING REVIEW',-.47,.346,.91,.073,{size:33,color:'#a6d9ff'});
@@ -93,7 +95,7 @@ export function createXRConsole(THREE, rig) {
         {size:27,color:state.armedText?'#f3cfac':palette.soft});
       button('APPROVE','approve',null,-.238,-.292,.455,.105,palette.accent);
       button('DECLINE','decline',null,.238,-.292,.455,.105,palette.danger);
-    }else{
+    }else if(state.tab==='gallery'){
       const item=state.artifact;
       label('APPROVED CONCEPTS',-.47,.346,.91,.073,{size:33,color:'#a6d9ff'});
       label(item ? item.kind.toUpperCase()+' · '+item.source.toUpperCase() : 'No published concepts',
@@ -113,9 +115,33 @@ export function createXRConsole(THREE, rig) {
       label(state.armedText||'Selecting a 3D exhibit edits its placement.',
         -.47,-.405,.91,.068,{size:25,color:state.armedText?'#f3cfac':palette.soft});
       button('REMOVE','remove',null,0,-.494,.93,.085,palette.danger);
+    }else if(state.tab==='ori'){
+      const dialogue=state.dialogue||{};
+      label('CONVERSATION / MODEL EXPERIMENT',-.47,.348,.91,.073,
+        {size:28,color:'#a6d9ff'});
+      label(dialogue.prompt?.label||'Select a question',-.47,.266,.91,.072,
+        {size:32,color:'#82e0da'});
+      label(dialogue.prompt?.question||'',-.47,.154,.91,.155,
+        {size:28,lines:2});
+      button('PREV QUESTION','prev-prompt',null,-.238,.018,.455,.082);
+      button('NEXT QUESTION','next-prompt',null,.238,.018,.455,.082);
+      button(dialogue.busy?'WORKING…':'ASK ORI','ask-preset',null,0,-.092,.93,.09,
+        dialogue.busy?palette.muted:palette.accent);
+      label(dialogue.status||'Pair in the 2D panel before entering VR.',-.47,-.186,.91,.071,
+        {size:24,color:'#a9c5e9'});
+      label(dialogue.page||'No model reply yet. Select ASK ORI to make one request.',
+        -.47,-.304,.91,.174,{size:25,lines:3});
+      label(dialogue.pageCount
+        ? 'REPLY PAGE '+(dialogue.pageIndex+1)+' / '+dialogue.pageCount+
+          ' · '+(dialogue.model||'UNKNOWN MODEL')
+        : 'NO RESPONSE',-.47,-.418,.91,.058,{size:24,color:palette.soft});
+      button('PREV PAGE','prev-reply',null,-.238,-.49,.455,.082);
+      button('NEXT PAGE','next-reply',null,.238,-.49,.455,.082);
+      button(dialogue.armedText||'STAGE IDEA (CONFIRM TWICE)','stage-reply',null,0,-.574,.93,.079,
+        palette.accent);
     }
-    button('CLOSE · LEFT GRIP TO REOPEN','close',null,0,-.633,.93,.092,palette.muted);
-    label('LOCAL SESSION · NO SERVER SYNC',-.47,-.713,.92,.043,{size:23,color:palette.soft});
+    button('CLOSE · LEFT GRIP TO REOPEN','close',null,0,-.667,.93,.066,palette.muted);
+    label('ONE-SHOT REQUESTS · NO AUTO-PUBLISH',-.47,-.722,.92,.03,{size:20,color:palette.soft});
   }
   return {
     group,get targets(){return targets;},render,
