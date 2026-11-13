@@ -1015,7 +1015,8 @@ function openZone(id){
   el('zone-description').textContent=zone.label+' · '+zone.description;
   if(world.address!=='0'){
     world.address='0';appendEvent(world,'travel','Visitor returned to the resident district.');
-    persist();rebuild();
+    activeRouteId=null;routeSummary=null;
+    persist();rebuild();resetVisitorAfterPocketChange();
   }
   renderHabitat();updateBoard();
   toast('Entered '+zone.label+'. '+(id==='workshop'?'Review proposals in the workshop panel.':'Local world state remains persistent.'));
@@ -1024,22 +1025,36 @@ function openZone(id){
     el(target).scrollIntoView({behavior:'smooth',block:'nearest'});
   }
 }
+
+function resetVisitorAfterPocketChange(){
+  if(!renderer.xr.isPresenting)return;
+  const pose=xrHeadPose();
+  if(pose){
+    visitorRig.position.x-=pose.pos.x;
+    visitorRig.position.z+=16-pose.pos.z;
+  }else visitorRig.position.set(0,0,16);
+  xrTeleportHeld=false;xrTeleportTarget=null;teleportMarker.visible=false;
+  pendingConsoleDock=true;
+}
 function goDeeper(index){
   activeZone=null;
   selectedArtifact=null;
+  activeRouteId=null;routeSummary=null;
   try{
     enterPocket(world,index);
     if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
-    persist();rebuild();
-    toast('Entered '+world.address+'. Procedural district restored.');
+    persist();rebuild();resetVisitorAfterPocketChange();
+    toast('Entered '+world.address+'. Visitor arrival reset to a walkable road.');
   }
   catch(error){toast(error.message);}
 }
 function goUp(){
   activeZone=null;selectedArtifact=null;
+  activeRouteId=null;routeSummary=null;
   returnPocket(world);
   if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
-  persist();rebuild();toast('Returned to '+world.address+'.');
+  persist();rebuild();resetVisitorAfterPocketChange();
+  toast('Returned to '+world.address+'. Arrival reset in VR.');
 }
 function interact(hit){
   if(!hit)return;
@@ -1220,9 +1235,9 @@ rebuild();resize();renderer.setAnimationLoop(animate);
 
 el('up-btn').addEventListener('click',goUp);
 el('home-btn').addEventListener('click',()=>{
-  activeZone=null;
+  activeZone=null;activeRouteId=null;routeSummary=null;
   world.address='0';appendEvent(world,'travel','Visitor returned to District Zero.');
-  persist();rebuild();toast('Welcome to District Zero.');
+  persist();rebuild();resetVisitorAfterPocketChange();toast('Welcome to District Zero.');
 });
 el('add-note').addEventListener('click',()=>{
   try{
@@ -1256,12 +1271,14 @@ el('import-file').addEventListener('change',async e=>{
     if(file.size>300000)throw new Error('World file exceeds 300 KB.');
     const imported=parseWorld(await file.text());
     if(!window.confirm('Replace local world with this archive? Export first if needed.'))return;
-    activeZone=null;world=imported;persist();rebuild();toast('World archive imported.');
+    activeZone=null;activeRouteId=null;routeSummary=null;
+    world=imported;persist();rebuild();resetVisitorAfterPocketChange();toast('World archive imported.');
   }catch(error){toast(error.message);}
 });
 el('reset-btn').addEventListener('click',()=>{
   if(!window.confirm('Permanently reset this local world? Export your memories first.'))return;
-  activeZone=null;world=makeWorld();persist();rebuild();toast('District Zero reset; resident habitat preserved.');
+  activeZone=null;activeRouteId=null;routeSummary=null;
+  world=makeWorld();persist();rebuild();resetVisitorAfterPocketChange();toast('District Zero reset; resident habitat preserved.');
 });
 
 
