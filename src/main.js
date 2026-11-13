@@ -18,6 +18,7 @@ import {
 import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
 import { promptByIndex, dialogueView } from './xr-dialogue.js';
+import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -38,6 +39,9 @@ let activeZone = null;
 let selectedArtifact = null;
 let latestModelReply = null;
 let modelBusy = false;
+let qa = makeQA();
+let qaCheckCursor = 0;
+let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
 const container = el('scene');
@@ -498,6 +502,12 @@ function refreshXRConsole(){
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    qa:{
+      ...summarizeQA(qa),
+      checkIndex:qaCheckCursor,
+      checkCount:QA_TESTS.length,
+      check:{...QA_TESTS[qaCheckCursor],status:qa.checks[QA_TESTS[qaCheckCursor].id]}
+    },
     dialogue:{
       prompt:promptByIndex(xrPromptCursor),
       busy:modelBusy,status:xrDialogueStatus,
@@ -516,7 +526,18 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(['gallery','ori'].includes(data)?data:'proposals');break;
+      case 'tab':changeTab(['gallery','ori','qa'].includes(data)?data:'proposals');break;
+      case 'prev-check':
+      case 'next-check':
+        qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
+        break;
+      case 'mark-pass':
+      case 'mark-fail':
+      case 'mark-skip':
+        setCheck(qa,QA_TESTS[qaCheckCursor].id,action.slice(5));
+        renderQaUI();
+        toast('Field result recorded locally: '+QA_TESTS[qaCheckCursor].label+'.');
+        break;
       case 'prev-prompt':
       case 'next-prompt':
         xrPromptCursor+=(action==='next-prompt'?1:-1);
