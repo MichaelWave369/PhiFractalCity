@@ -19,6 +19,10 @@ import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
 import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
+import {
+  defaultComfort,loadComfort,saveComfort,validateComfort,cycleComfort,readStick,
+  snapTurnRequest,smoothDelta,teleportPoint,clampVisitor
+} from './xr-comfort.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -41,6 +45,12 @@ let latestModelReply = null;
 let modelBusy = false;
 let qa = makeQA();
 let qaCheckCursor = 0;
+let comfort = loadComfort(storage);
+let xrTurnLatched = false;
+let xrTeleportHeld = false;
+let xrTeleportTarget = null;
+let xrRightController = null;
+let pendingConsoleDock = false;
 let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
@@ -89,6 +99,14 @@ const interactives = [];
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 const clock = new THREE.Clock();
+const teleportMarker = new THREE.Mesh(
+  new THREE.RingGeometry(.37,.52,32),
+  new THREE.MeshBasicMaterial({color:0x72efd5,side:THREE.DoubleSide,depthWrite:false})
+);
+teleportMarker.rotation.x=-Math.PI/2;
+teleportMarker.visible=false;
+teleportMarker.position.y=.07;
+scene.add(teleportMarker);
 const portalColors = ['#61d5ec','#97afff','#a293ff','#d8a6ff','#65edca','#eab1cb','#7b9eff','#79d8de','#b79ffa'];
 
 function mat(color, opts={}) {
@@ -502,6 +520,7 @@ function refreshXRConsole(){
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    comfort,
     qa:{
       ...summarizeQA(qa),
       checkIndex:qaCheckCursor,
@@ -527,7 +546,12 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(['gallery','ori','qa'].includes(data)?data:'proposals');break;
+      case 'tab':changeTab(['gallery','ori','qa','comfort'].includes(data)?data:'proposals');break;
+      case 'cycle-movement':updateComfort(cycleComfort(comfort,'locomotion'));break;
+      case 'cycle-turn':updateComfort(cycleComfort(comfort,'turn'));break;
+      case 'cycle-speed':updateComfort(cycleComfort(comfort,'speed'));break;
+      case 'cycle-panel':updateComfort(cycleComfort(comfort,'panelDistance'));pendingConsoleDock=true;break;
+      case 'recenter-panel':pendingConsoleDock=true;toast('Panel will be recentered to your current headset direction.');break;
       case 'prev-check':
       case 'next-check':
         qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
@@ -623,6 +647,145 @@ function handleXRAction(action,data){
   refresh();
 }
 
+
+function renderComfortUI(){
+  el('comfort-movement').value=comfort.locomotion;
+  el('comfort-turn').value=comfort.turn;
+  el('comfort-speed').value=String(comfort.speed);
+  el('comfort-distance').value=String(comfort.panelDistance);
+  el('comfort-dock').disabled=!renderer.xr.isPresenting;
+}
+function updateComfort(settings){
+  comfort=validateComfort(settings);
+  if(!saveComfort(comfort,storage)){
+    toast('Comfort settings only saved for this open page; browser storage unavailable.');
+  }
+  renderComfortUI();refreshXRConsole();
+}
+for(const [element,field,parse] of [
+  ['comfort-movement','locomotion',String],
+  ['comfort-turn','turn',String],
+  ['comfort-speed','speed',Number],
+  ['comfort-distance','panelDistance',Number]
+]){
+  el(element).addEventListener('change',()=>{
+    try{
+      const candidate={...comfort,[field]:parse(el(element).value)};
+      updateComfort(candidate);
+      if(field==='panelDistance')pendingConsoleDock=true;
+    }catch(error){renderComfortUI();toast(error.message);}
+  });
+}
+el('comfort-defaults').addEventListener('click',()=>{
+  updateComfort(defaultComfort());
+  if(renderer.xr.isPresenting)pendingConsoleDock=true;
+  toast('Visitor comfort defaults restored.');
+});
+el('comfort-dock').addEventListener('click',()=>{
+  if(!renderer.xr.isPresenting){toast('Enter VR, then recenter from the MOVE tab.');return;}
+  pendingConsoleDock=true;
+  toast('Panel recenter requested.');
+});
+renderComfortUI();
+
+function xrHeadPose(){
+  const headset=renderer.xr.getCamera(camera);
+  if(!headset)return null;
+  headset.updateMatrixWorld(true);
+  const pos=new THREE.Vector3();
+  const forward=new THREE.Vector3();
+  headset.getWorldPosition(pos);
+  headset.getWorldDirection(forward);
+  if(!Number.isFinite(pos.x)||!Number.isFinite(pos.y)||!Number.isFinite(pos.z)||
+     !Number.isFinite(forward.x)||!Number.isFinite(forward.z))return null;
+  return {pos,forward};
+}
+function dockConsole(){
+  if(!renderer.xr.isPresenting)return false;
+  visitorRig.updateMatrixWorld(true);
+  const pose=xrHeadPose();
+  return pose?xrConsole.dock(pose.pos,pose.forward,comfort.panelDistance):false;
+}
+function getControllerSource(hand){
+  if(!renderer.xr.isPresenting)return null;
+  const sources=renderer.xr.getSession()?.inputSources;
+  if(!sources)return null;
+  return [...sources].find(source=>source.handedness===hand && source.gamepad)||null;
+}
+function refreshTeleportTarget(){
+  xrTeleportTarget=null;
+  teleportMarker.visible=false;
+  if(!xrTeleportHeld||!renderer.xr.isPresenting||!xrRightController)return;
+  const pose=xrHeadPose();
+  if(!pose)return;
+  xrRightController.updateWorldMatrix(true,false);
+  const origin=new THREE.Vector3().setFromMatrixPosition(xrRightController.matrixWorld);
+  const direction=new THREE.Vector3(0,0,-1).transformDirection(xrRightController.matrixWorld);
+  const result=teleportPoint(origin,direction,pose.pos);
+  if(!result)return;
+  xrTeleportTarget=result;
+  teleportMarker.position.set(result.x,.07,result.z);
+  teleportMarker.visible=true;
+}
+function commitTeleport(){
+  refreshTeleportTarget();
+  const target=xrTeleportTarget;
+  xrTeleportHeld=false;
+  xrTeleportTarget=null;
+  teleportMarker.visible=false;
+  if(!target){toast('No safe, reachable road target. Aim at a clear section of ground.');return;}
+  const pose=xrHeadPose();
+  if(!pose)return;
+  // Move the headset's actual horizontal world position to the chosen ground point.
+  const next=clampVisitor(
+    visitorRig.position.x+target.x-pose.pos.x,
+    visitorRig.position.z+target.z-pose.pos.z
+  );
+  visitorRig.position.x=next.x;
+  visitorRig.position.z=next.z;
+  recordQA(qa,'teleport-move');
+  pendingConsoleDock=true;
+  toast('Teleported to safe ground. Recenter the console using MOVE if necessary.');
+}
+function snapRigAtHead(radians){
+  if(!renderer.xr.isPresenting||!Number.isFinite(radians)||radians===0)return;
+  const before=xrHeadPose()?.pos;
+  if(!before)return;
+  visitorRig.rotation.y+=radians;
+  visitorRig.updateMatrixWorld(true);
+  const after=xrHeadPose()?.pos;
+  if(after){
+    const next=clampVisitor(
+      visitorRig.position.x+before.x-after.x,
+      visitorRig.position.z+before.z-after.z
+    );
+    visitorRig.position.x=next.x;
+    visitorRig.position.z=next.z;
+  }
+  recordQA(qa,'snap-turn');
+  // Console remains docked at the visitor's old view until they explicitly recenter.
+}
+function updateXRComfort(dt){
+  if(!renderer.xr.isPresenting)return;
+  if(pendingConsoleDock){
+    pendingConsoleDock=false;
+    if(!dockConsole())pendingConsoleDock=true;
+  }
+  if(xrTeleportHeld)refreshTeleportTarget();
+  const right=readStick(getControllerSource('right')?.gamepad);
+  const turn=snapTurnRequest(right.x,xrTurnLatched,comfort.turn);
+  xrTurnLatched=turn.latched;
+  if(turn.radians)snapRigAtHead(turn.radians);
+  if(comfort.locomotion!=='smooth')return;
+  const left=readStick(getControllerSource('left')?.gamepad);
+  if(!left.x&&!left.y)return;
+  const forward=xrHeadPose()?.forward;
+  if(!forward)return;
+  const movement=smoothDelta(left,forward,dt,comfort.speed);
+  const next=clampVisitor(visitorRig.position.x+movement.x,visitorRig.position.z+movement.z);
+  visitorRig.position.x=next.x;
+  visitorRig.position.z=next.z;
+}
 function renderQaUI(){
   const summary=summarizeQA(qa);
   const frames=summary.frame;
@@ -793,14 +956,37 @@ for(let i=0;i<2;i++){
   );
   controller.add(rayLine);
   visitorRig.add(controller);
-  if(i===0)controller.addEventListener('squeezestart',()=>{
+  controller.addEventListener('connected',event=>{
+    controller.userData.handedness=event.data?.handedness||'unknown';
+    if(controller.userData.handedness==='right')xrRightController=controller;
+  });
+  controller.addEventListener('disconnected',()=>{
+    if(xrRightController===controller){
+      xrRightController=null;xrTeleportHeld=false;
+      xrTeleportTarget=null;teleportMarker.visible=false;
+    }
+    controller.userData.handedness='unknown';
+  });
+  controller.addEventListener('squeezestart',()=>{
     if(!renderer.xr.isPresenting)return;
-    recordQA(qa,'left-grip');
-    const visible=xrConsole.toggle();
-    recordQA(qa,visible?'console-open':'console-close');
-    if(visible)refreshXRConsole();
-    renderQaUI();
-    toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
+    if(controller.userData.handedness==='left'){
+      recordQA(qa,'left-grip');
+      const visible=xrConsole.toggle();
+      recordQA(qa,visible?'console-open':'console-close');
+      if(visible){pendingConsoleDock=true;refreshXRConsole();}
+      renderQaUI();
+      toast(visible?'XR console reopened.':'XR console hidden.');
+    }else if(controller.userData.handedness==='right'){
+      xrRightController=controller;xrTeleportHeld=true;
+      recordQA(qa,'teleport-aim');
+      refreshTeleportTarget();
+      toast('Aim at a clear stretch of ground, then release right grip to teleport.');
+    }
+  });
+  controller.addEventListener('squeezeend',()=>{
+    if(renderer.xr.isPresenting&&controller.userData.handedness==='right'&&xrTeleportHeld){
+      commitTeleport();
+    }
   });
   controller.addEventListener('selectstart',()=>{
     if(renderer.xr.isPresenting)recordQA(qa,'controller-select');
@@ -811,40 +997,32 @@ for(let i=0;i<2;i++){
 }
 renderer.xr.addEventListener('sessionstart',()=>{
   recordQA(qa,'xr-enter');
-  renderQaUI();
   orbit.enabled=false;
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
+  visitorRig.rotation.y=0;
   camera.position.set(0,0,0);
-  xrConsole.show();refreshXRConsole();
-  toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
+  xrTurnLatched=false;
+  xrTeleportHeld=false;
+  teleportMarker.visible=false;
+  pendingConsoleDock=true;
+  xrConsole.show();
+  refreshXRConsole();renderQaUI();renderComfortUI();
+  toast('VR ready. Left grip opens console; right grip teleports. MOVE tab adjusts comfort.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
   recordQA(qa,'xr-exit');
-  renderQaUI();
   xrConsole.hide();
+  xrTeleportHeld=false;xrTeleportTarget=null;
+  teleportMarker.visible=false;
+  pendingConsoleDock=false;xrTurnLatched=false;
   visitorRig.position.set(0,0,0);
+  visitorRig.rotation.y=0;
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
-  orbit.enabled=true;orbit.target.set(0,2,0);orbit.update();
+  orbit.enabled=true;
+  orbit.target.set(0,2,0);orbit.update();
+  renderQaUI();renderComfortUI();
 });
-function moveVisitor(dt){
-  if(!renderer.xr.isPresenting)return;
-  const session=renderer.xr.getSession();
-  if(!session)return;
-  const source=[...session.inputSources].find(s=>s.handedness==='left'&&s.gamepad);
-  if(!source)return;
-  const axes=source.gamepad.axes;
-  const x=axes.length>=4?axes[2]:axes[0],y=axes.length>=4?axes[3]:axes[1];
-  if(Math.hypot(x||0,y||0)<.18)return;
-  const heading=new THREE.Vector3();
-  renderer.xr.getCamera(camera).getWorldDirection(heading);
-  heading.y=0;heading.normalize();
-  const right=new THREE.Vector3().crossVectors(heading,new THREE.Vector3(0,1,0)).normalize();
-  visitorRig.position.addScaledVector(right,(x||0)*dt*3.5);
-  visitorRig.position.addScaledVector(heading,-(y||0)*dt*3.5);
-  visitorRig.position.x=THREE.MathUtils.clamp(visitorRig.position.x,-48,48);
-  visitorRig.position.z=THREE.MathUtils.clamp(visitorRig.position.z,-48,48);
-}
 function resize(){
   const width=container.clientWidth,height=Math.max(1,container.clientHeight);
   camera.aspect=width/height;
@@ -865,7 +1043,7 @@ function animate(){
       renderQaUI();
     }
   }else orbit.update();
-  moveVisitor(dt);
+  updateXRComfort(dt);
   const t=performance.now()/1000;
   if(crystal){crystal.rotation.y+=dt*.35;crystal.position.y=3.05+Math.sin(t*1.4)*.15;}
   if(resident){resident.rotation.y+=dt*.4;resident.position.y=2.6+Math.sin(t*1.7)*.22;}
