@@ -902,14 +902,16 @@ el('bridge-disconnect').addEventListener('click',()=>{
   updateBoard();
 });
 showBridgeOptions();
-el('ask-ori').addEventListener('click',async()=>{
+async function requestOri(prompt,{fromXR=false}={}){
   if(modelBusy)return;
-  const text=el('ori-question').value;
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
   const requestedPocket=world.address;
   const transport=el('ori-transport').value;
   modelBusy=true;
   latestModelReply=null;
+  armedReview=null;
+  xrReplyPage=0;
+  xrDialogueStatus='Sending one explicit request; no private memories.';
   el('ask-ori').disabled=true;
   el('ori-transport').disabled=true;
   el('stage-ori-proposal').disabled=true;
@@ -917,23 +919,29 @@ el('ask-ori').addEventListener('click',async()=>{
     ? 'Contacting your paired HTTPS PC bridge…'
     : 'Contacting your local Ollama runtime…';
   displayModelStatus('One-shot request · only current public pocket context; no private vault.');
-  updateBoard();
+  refreshXRConsole();updateBoard();
   try{
+    // VR must use an explicitly paired service. Headset localhost is NOT the PC.
+    if(fromXR&&transport!=='bridge'){
+      throw new Error('Choose and pair the HTTPS PC bridge in the 2D panel before asking from Quest VR.');
+    }
     const context=makePublicContext(world,habitat);
     const result=transport==='bridge'
       ? await askPairedBridge({
-          prompt:text,model,context,
+          prompt,model,context,
           endpoint:el('bridge-url').value.trim(),
           token:el('bridge-token').value.trim()
         })
-      : await askLocalModel({prompt:text,model,context});
+      : await askLocalModel({prompt,model,context});
     latestModelReply={...result,address:requestedPocket};
+    xrDialogueStatus='Model '+latestModelReply.model+' replied · UNVERIFIED';
     el('model-reply').textContent=latestModelReply.text;
     displayModelStatus('Received · '+latestModelReply.endpoint+' · model '+latestModelReply.model+
       ' · pocket '+latestModelReply.address+' · unverified; not saved to world memory.');
-    toast('Ori model reply received. Review it before staging any concept.');
+    toast('Ori replied. Read the pages and review before staging.');
   }catch(error){
     latestModelReply=null;
+    xrDialogueStatus=String(error.message).slice(0,115);
     el('model-reply').textContent='No usable response.';
     displayModelStatus(error.message);
     toast(error.message);
@@ -942,26 +950,33 @@ el('ask-ori').addEventListener('click',async()=>{
     el('ask-ori').disabled=false;
     el('ori-transport').disabled=false;
     el('stage-ori-proposal').disabled=!latestModelReply;
-    updateBoard();
+    refreshXRConsole();updateBoard();
   }
-});
+}
+el('ask-ori').addEventListener('click',()=>void requestOri(el('ori-question').value));
 el('clear-ori').addEventListener('click',()=>{
   if(modelBusy){toast('Current request must complete or time out.');return;}
   latestModelReply=null;
   el('model-reply').textContent='No response yet.';
   el('stage-ori-proposal').disabled=true;
   displayModelStatus('Cleared · nothing stored in the world.');
-  updateBoard();
+  xrDialogueStatus='Reply cleared; no response stored.';
+  xrReplyPage=0;
+  armedReview=null;
+  refreshXRConsole();updateBoard();
 });
+function stageOriProposal(){
+  if(modelBusy || !latestModelReply)throw new Error('No model reply available to stage');
+  const proposal=proposeCreation(habitat,latestModelReply.text.slice(0,490),{
+    kind:'research',author:'ori-001',source:'model-generated',
+    address:latestModelReply.address,model:latestModelReply.model
+  });
+  persistHabitat();
+  return proposal;
+}
 el('stage-ori-proposal').addEventListener('click',()=>{
-  if(modelBusy || !latestModelReply)return;
   try{
-    const summary=latestModelReply.text.slice(0,490);
-    const proposal=proposeCreation(habitat,summary,{
-      kind:'research',author:'ori-001',source:'model-generated',
-      address:latestModelReply.address,model:latestModelReply.model
-    });
-    persistHabitat();
+    const proposal=stageOriProposal();
     toast('Model suggestion '+proposal.id+' staged. Human approval still required.');
     el('workshop-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(error){toast(error.message);}
