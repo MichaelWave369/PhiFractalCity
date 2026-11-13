@@ -56,11 +56,13 @@ test('the report never includes memory, browser metadata, bridge secret, address
   qa.userAgent='browser-fingerprint';
   qa.bridgeUrl='https://192.168.1.1:8765/v1/chat';
   qa.modelReply='This is a confidential model answer';
+  qa.latestEvent='Secret accidentally injected as a status';
   recordQA(qa,'model-attempt');
   const text=exportQA(qa);
   for(const secret of [qa.token,qa.privateNotes[0],qa.userAgent,qa.bridgeUrl,qa.modelReply]){
     assert.equal(text.includes(secret),false);
   }
+  assert.equal(text.includes(qa.latestEvent),false);
   const exported=JSON.parse(text);
   assert.deepEqual(Object.keys(exported),['schema','startedAt','exportedAt','summary','checklist','events','disclaimer']);
   assert.equal(exported.events[0].code,'model-attempt');
