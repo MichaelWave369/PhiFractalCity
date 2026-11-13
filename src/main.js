@@ -19,6 +19,10 @@ import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
 import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
+import {
+  defaultComfort,loadComfort,saveComfort,validateComfort,cycleComfort,readStick,
+  snapTurnRequest,smoothDelta,teleportPoint,clampVisitor
+} from './xr-comfort.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -41,6 +45,12 @@ let latestModelReply = null;
 let modelBusy = false;
 let qa = makeQA();
 let qaCheckCursor = 0;
+let comfort = loadComfort(storage);
+let xrTurnLatched = false;
+let xrTeleportHeld = false;
+let xrTeleportTarget = null;
+let xrRightController = null;
+let pendingConsoleDock = false;
 let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
@@ -89,6 +99,14 @@ const interactives = [];
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 const clock = new THREE.Clock();
+const teleportMarker = new THREE.Mesh(
+  new THREE.RingGeometry(.37,.52,32),
+  new THREE.MeshBasicMaterial({color:0x72efd5,side:THREE.DoubleSide,depthWrite:false})
+);
+teleportMarker.rotation.x=-Math.PI/2;
+teleportMarker.visible=false;
+teleportMarker.position.y=.07;
+scene.add(teleportMarker);
 const portalColors = ['#61d5ec','#97afff','#a293ff','#d8a6ff','#65edca','#eab1cb','#7b9eff','#79d8de','#b79ffa'];
 
 function mat(color, opts={}) {
@@ -502,6 +520,7 @@ function refreshXRConsole(){
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    comfort,
     qa:{
       ...summarizeQA(qa),
       checkIndex:qaCheckCursor,
@@ -527,7 +546,12 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(['gallery','ori','qa'].includes(data)?data:'proposals');break;
+      case 'tab':changeTab(['gallery','ori','qa','comfort'].includes(data)?data:'proposals');break;
+      case 'cycle-movement':updateComfort(cycleComfort(comfort,'locomotion'));break;
+      case 'cycle-turn':updateComfort(cycleComfort(comfort,'turn'));break;
+      case 'cycle-speed':updateComfort(cycleComfort(comfort,'speed'));break;
+      case 'cycle-panel':updateComfort(cycleComfort(comfort,'panelDistance'));pendingConsoleDock=true;break;
+      case 'recenter-panel':pendingConsoleDock=true;toast('Panel will be recentered to your current headset direction.');break;
       case 'prev-check':
       case 'next-check':
         qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
