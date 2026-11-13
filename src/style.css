@@ -131,3 +131,10 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 #comfort-panel select{margin-bottom:7px}
 #comfort-panel .button-row{margin-top:14px}
 #comfort-panel .button:disabled{opacity:.4;cursor:not-allowed}
+
+/* R0.9: walkable destination previews and collision-aware world routes */
+#pathways-panel{background:linear-gradient(145deg,#102d33,#151e35)}
+#pathways-panel .button-row{margin-top:12px}
+#pathways-panel select{margin-bottom:5px}
+#pathways-panel .button:disabled{opacity:.4;cursor:not-allowed}
+.route-status{font-size:11px;line-height:1.5;color:#91e4ce;background:#0c1c2c;border:1px solid #31536a;border-radius:8px;padding:10px 12px;margin:12px 0 0}
