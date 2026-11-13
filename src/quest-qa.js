@@ -75,7 +75,7 @@ export function summarizeQA(qa){
     sessions:qa.sessions,
     active:qa.active,
     eventCount:qa.eventSequence,
-    latestEvent:qa.latestEvent,
+    latestEvent:EVENTS.has(qa.latestEvent)?qa.latestEvent:'none',
     counts,
     frame:{
       samples:frames.length,
