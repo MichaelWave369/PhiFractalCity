@@ -76,14 +76,16 @@ export function createXRConsole(THREE, rig) {
     rectangle(1.02,1.48,0,0,-.01,palette.bg);
     label('Φ CITY / XR CONSOLE',-.47,.655,.92,.105,{size:37,color:'#82e0da'});
     label('POCKET '+state.pocket,-.47,.565,.92,.075,{size:30,color:palette.soft});
-    button('PROPOSALS','tab','proposals',-.354,.454,.225,.105,
+    button('REVIEW','tab','proposals',-.378,.454,.178,.105,
       state.tab==='proposals'?palette.accent:palette.muted);
-    button('EXHIBITS','tab','gallery',-.118,.454,.225,.105,
+    button('BUILD','tab','gallery',-.189,.454,.178,.105,
       state.tab==='gallery'?palette.accent:palette.muted);
-    button('TALK','tab','ori',.118,.454,.225,.105,
+    button('ORI','tab','ori',0,.454,.178,.105,
       state.tab==='ori'?palette.accent:palette.muted);
-    button('FIELD LAB','tab','qa',.354,.454,.225,.105,
+    button('QA','tab','qa',.189,.454,.178,.105,
       state.tab==='qa'?palette.accent:palette.muted);
+    button('MOVE','tab','comfort',.378,.454,.178,.105,
+      state.tab==='comfort'?palette.accent:palette.muted);
     if(state.tab==='proposals'){
       const item=state.proposal;
       label('PENDING REVIEW',-.47,.346,.91,.073,{size:33,color:'#a6d9ff'});
@@ -172,6 +174,26 @@ export function createXRConsole(THREE, rig) {
         {size:25,color:'#e6bd87'});
       label('EXIT VR TO EXPORT REDACTED REPORT',-.47,-.595,.91,.065,
         {size:26,color:'#a9c5e9'});
+    }else if(state.tab==='comfort'){
+      const comfort=state.comfort||{};
+      label('VISITOR COMFORT · OPTIONAL',-.47,.35,.91,.075,{size:32,color:'#84e2d6'});
+      label('RIGHT GRIP + RELEASE: TELEPORT',-.47,.256,.91,.068,{size:28,color:'#b5cafa'});
+      label('RIGHT STICK: SNAP TURN',-.47,.178,.91,.068,{size:27,color:'#b5cafa'});
+      label('LEFT STICK: SMOOTH (WHEN ENABLED)',-.47,.100,.91,.068,
+        {size:27,color:'#b5cafa'});
+      button('MOVE · '+(comfort.locomotion||'teleport').toUpperCase(),
+        'cycle-movement',null,0,-.005,.93,.094,palette.primary);
+      button('TURN · '+(comfort.turn||'snap45').toUpperCase(),
+        'cycle-turn',null,0,-.109,.93,.094,palette.primary);
+      button('WALK SPEED · '+(comfort.speed||1.5)+' m/s',
+        'cycle-speed',null,0,-.213,.93,.094,palette.primary);
+      button('PANEL DISTANCE · '+(comfort.panelDistance||1.8)+' m',
+        'cycle-panel',null,0,-.317,.93,.094,palette.primary);
+      button('RECENTER FLOATING PANEL','recenter-panel',null,0,-.424,.93,.095,palette.accent);
+      label('TELEPORT AVAILABLE IN BOTH MODES',-.47,-.54,.91,.062,
+        {size:26,color:'#a9c5e9'});
+      label('NO COLLISION PHYSICS · QA REQUIRED',-.47,-.6,.91,.059,
+        {size:25,color:'#e6bd87'});
     }
     button('CLOSE · LEFT GRIP TO REOPEN','close',null,0,-.667,.93,.066,palette.muted);
     label('ONE-SHOT REQUESTS · NO AUTO-PUBLISH',-.47,-.722,.92,.03,{size:20,color:palette.soft});
@@ -179,6 +201,18 @@ export function createXRConsole(THREE, rig) {
   return {
     group,get targets(){return targets;},render,
     show(){group.visible=true;},
+    dock(headPosition,forward,distance){
+      if(!headPosition||!forward||!Number.isFinite(distance))return false;
+      const heading=forward.clone();heading.y=0;
+      if(heading.lengthSq()<.001)heading.set(0,0,-1);
+      heading.normalize();
+      const target=headPosition.clone().addScaledVector(heading,distance);
+      target.y-=.13;
+      // Position is stored in rig coordinates; panel remains stationary until redocked.
+      group.position.copy(rig.worldToLocal(target));
+      group.lookAt(headPosition);
+      return true;
+    },
     hide(){group.visible=false;},
     toggle(){group.visible=!group.visible;return group.visible;},
     isVisible(){return group.visible;},
