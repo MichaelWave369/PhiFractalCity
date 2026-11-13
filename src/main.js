@@ -21,8 +21,11 @@ import { promptByIndex, dialogueView } from './xr-dialogue.js';
 import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
 import {
   defaultComfort,loadComfort,saveComfort,validateComfort,cycleComfort,readStick,
-  snapTurnRequest,smoothDelta,teleportPoint,clampVisitor
+  snapTurnRequest,smoothDelta,clampVisitor
 } from './xr-comfort.js';
+import {
+  createNavigationMap,resolveMotion,safeTeleport,routeDestinations,planPath
+} from './navigation.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -51,6 +54,10 @@ let xrTeleportHeld = false;
 let xrTeleportTarget = null;
 let xrRightController = null;
 let pendingConsoleDock = false;
+let navigationMap = null;
+let routeOverlay = null;
+let activeRouteId = null;
+let routeSummary = null;
 let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
@@ -156,6 +163,7 @@ function buildGround() {
   }
 }
 function buildBuildings(district) {
+  // Pedestrian-sized gaps between deterministic towers are essential for walkable paths.
   const palette=['#263a61','#273955','#302b54','#274c60'];
   const trims=mat('#58618c',{emissive:'#1a2259',emissiveIntensity:.5});
   const lights=[
@@ -164,10 +172,10 @@ function buildBuildings(district) {
   ];
   for(const building of district.buildings){
     const {x,z,height,style}=building;
-    cube(3.5,height,3.5,mat(palette[style],{emissive:'#0a1930',emissiveIntensity:.22}),x,height/2+.6,z);
-    cube(3.8,.18,3.8,trims,x,height+.7,z);
+    cube(2.5,height,2.5,mat(palette[style],{emissive:'#0a1930',emissiveIntensity:.22}),x,height/2+.6,z);
+    cube(2.8,.18,2.8,trims,x,height+.7,z);
     for(let j=0;j<Math.floor(height/2.2)+1;j++){
-      cube(1.1,.35,.035,lights[j%3===0?0:1],x,1.2+j*1.9,z+1.77);
+      cube(1.1,.35,.035,lights[j%3===0?0:1],x,1.2+j*1.9,z+1.27);
     }
   }
 }
@@ -367,7 +375,11 @@ function rebuild(){
   interactives.length=0;
   board=null;
   const district=generateDistrict(world.address,world.seed);
+  navigationMap=createNavigationMap(district,workbench.placements);
+  routeOverlay=null;
+  routeSummary=null;
   buildGround();buildBuildings(district);buildPlaza();buildPortals(district);buildResident();buildHabitatZones();buildArtifactGallery();buildWorkbenchPlacements();buildBoard();
+  if(activeRouteId)previewRoute({silent:true});
   updateUI();
 }
 function toast(message){
@@ -721,7 +733,7 @@ function refreshTeleportTarget(){
   xrRightController.updateWorldMatrix(true,false);
   const origin=new THREE.Vector3().setFromMatrixPosition(xrRightController.matrixWorld);
   const direction=new THREE.Vector3(0,0,-1).transformDirection(xrRightController.matrixWorld);
-  const result=teleportPoint(origin,direction,pose.pos);
+  const result=safeTeleport(navigationMap,origin,direction,pose.pos);
   if(!result)return;
   xrTeleportTarget=result;
   teleportMarker.position.set(result.x,.07,result.z);
@@ -737,10 +749,15 @@ function commitTeleport(){
   const pose=xrHeadPose();
   if(!pose)return;
   // Move the headset's actual horizontal world position to the chosen ground point.
-  const next=clampVisitor(
-    visitorRig.position.x+target.x-pose.pos.x,
-    visitorRig.position.z+target.z-pose.pos.z
-  );
+  const intended={
+    x:visitorRig.position.x+target.x-pose.pos.x,
+    z:visitorRig.position.z+target.z-pose.pos.z
+  };
+  const next=clampVisitor(intended.x,intended.z);
+  if(Math.hypot(next.x-intended.x,next.z-intended.z)>.001){
+    toast('Landing exceeds calibrated district limits. Choose another ground target.');
+    return;
+  }
   visitorRig.position.x=next.x;
   visitorRig.position.z=next.z;
   recordQA(qa,'teleport-move');
@@ -782,7 +799,12 @@ function updateXRComfort(dt){
   const forward=xrHeadPose()?.forward;
   if(!forward)return;
   const movement=smoothDelta(left,forward,dt,comfort.speed);
-  const next=clampVisitor(visitorRig.position.x+movement.x,visitorRig.position.z+movement.z);
+  const pose=xrHeadPose()?.pos;
+  if(!pose||!navigationMap)return;
+  const result=resolveMotion(navigationMap,{x:pose.x,z:pose.z},movement);
+  if(result.blocked)recordBlockedMovement();
+  const dx=result.position.x-pose.x,dz=result.position.z-pose.z;
+  const next=clampVisitor(visitorRig.position.x+dx,visitorRig.position.z+dz);
   visitorRig.position.x=next.x;
   visitorRig.position.z=next.z;
 }
