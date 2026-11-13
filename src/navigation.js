@@ -2,7 +2,7 @@
  * No full physics or independently navigated agents. Collision approximates
  * actual fixed procedural building footprint, root monuments, and local exhibits.
  */
-import { teleportPoint } from './xr-comfort.js';
+import { MAX_TELEPORT_RANGE } from './xr-comfort.js';
 
 export const NAV_RADIUS = .42;
 export const NAV_LIMIT = 44;
@@ -89,8 +89,17 @@ export function resolveMotion(map,start,delta,radius=NAV_RADIUS){
   return {position:current,blocked,slid};
 }
 export function safeTeleport(map,origin,direction,head){
-  const landing=teleportPoint(origin,direction,head);
-  return landing && isWalkable(map,landing) ? landing : null;
+  if(!origin||!direction||!head ||
+     ![origin.x,origin.y,origin.z,direction.x,direction.y,direction.z,head.x,head.z]
+       .every(Number.isFinite) || direction.y>=-.12)return null;
+  const t=-origin.y/direction.y;
+  if(t<.3||t>30)return null;
+  const point={
+    x:Math.round((origin.x+direction.x*t)*100)/100,
+    z:Math.round((origin.z+direction.z*t)*100)/100
+  };
+  if(Math.hypot(point.x-head.x,point.z-head.z)>MAX_TELEPORT_RANGE)return null;
+  return isWalkable(map,point)?point:null;
 }
 export function routeDestinations(address){
   if(!ADDRESS.test(address))throw new Error('Invalid pocket destination');
