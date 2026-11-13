@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.6 candidate. Rungs 0.1–0.5 have merged and deployed. An experimental **VR-native Ori conversation panel** with preset questions and paged answers is in PR review. Actual Quest 3 hardware, trusted TLS and cross-device model connectivity are not yet verified.
+> **Status:** Rung 0.7 candidate. Rungs 0.1–0.6 are merged and published. The **Quest Field Lab** is under review to capture manual headset acceptance, XR controller events and approximate JS frame timing. Real Quest 3, TLS and cross-device model behavior are still not independently verified.
 
 ## Vision
 
@@ -50,13 +50,19 @@ An optional **operator-started HTTPS Node.js bridge** can forward one user-reque
 
 The model is still a one-shot text assistant, not an unattended autonomous agent. VR-native typing, two-way speech and shared multiuser state are not included.
 
-## Rung 0.6 candidate: Talk to Ori in immersive VR
+## Rung 0.6: Talk to Ori in immersive VR
 
 The floating XR console now includes **Talk to Ori** alongside Proposals and Exhibits. Choose among four fixed, visitor-triggered prompts and view an unverified model response across readable pages. A suggestion can be staged only with **two explicit selections**, and still needs separate workshop approval before publishing a concept.
 
 The Quest must first pair with the **R0.5 HTTPS bridge using the browser's 2D interface**. VR preset prompts cannot secretly connect to desktop Ollama or read private resident memories. This is not microphone chat, a continuously active agent, or verified Quest hardware support.
 
 See [R0.6 XR Conversation & Quest Acceptance Guide](docs/XR_DIALOGUE_R06.md).
+
+## Rung 0.7 candidate: Quest Field Lab
+
+A fourth tab in the floating WebXR console enables a **manual eight-point headset acceptance checklist** and a bounded session-only diagnostic view. The normal browser sidebar mirrors these tests and allows an explicit, privacy-redacted JSON export. No browser fingerprint, pairing token, private memory, model reply, or raw action payload enters the report. No analytics or network upload is performed.
+
+A green build is not evidence of real Quest 3 acceptance. A visitor must perform and mark the tests in the headset; all marks start **untested**. See [Quest Field Lab acceptance guide](docs/QUEST_FIELD_LAB_R07.md).
 
 ## Run locally
 

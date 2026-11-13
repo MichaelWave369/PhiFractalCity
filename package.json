@@ -1,7 +1,7 @@
 {
   "name": "phi-fractal-city",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "A persistent, recursive, agent-native city with a human WebXR visitor interface.",
   "scripts": {

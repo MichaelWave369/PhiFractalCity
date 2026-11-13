@@ -18,6 +18,7 @@ import {
 import { createXRConsole } from './xr-console.js';
 import { reviewGate } from './xr-policy.js';
 import { promptByIndex, dialogueView } from './xr-dialogue.js';
+import { QA_TESTS, makeQA, recordQA, recordFrame, setCheck, summarizeQA, exportQA } from './quest-qa.js';
 import './style.css';
 
 const el = id => document.getElementById(id);
@@ -38,6 +39,9 @@ let activeZone = null;
 let selectedArtifact = null;
 let latestModelReply = null;
 let modelBusy = false;
+let qa = makeQA();
+let qaCheckCursor = 0;
+let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
 const container = el('scene');
@@ -498,6 +502,12 @@ function refreshXRConsole(){
     artifact:current||null,
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
+    qa:{
+      ...summarizeQA(qa),
+      checkIndex:qaCheckCursor,
+      checkCount:QA_TESTS.length,
+      check:{...QA_TESTS[qaCheckCursor],status:qa.checks[QA_TESTS[qaCheckCursor].id]}
+    },
     dialogue:{
       prompt:promptByIndex(xrPromptCursor),
       busy:modelBusy,status:xrDialogueStatus,
@@ -509,6 +519,7 @@ function refreshXRConsole(){
 }
 function handleXRAction(action,data){
   if(!renderer.xr.isPresenting)return;
+  recordQA(qa,'panel-action');
   const proposals=currentProposals(),artifacts=currentArtifacts();
   const proposal=proposals[xrProposalCursor],artifact=artifacts[xrArtifactCursor];
   const changeTab=tab=>{xrTab=tab;armedReview=null;};
@@ -516,7 +527,18 @@ function handleXRAction(action,data){
   try{
     switch(action){
       case 'close':xrConsole.hide();toast('XR console hidden. Left grip reopens it.');return;
-      case 'tab':changeTab(['gallery','ori'].includes(data)?data:'proposals');break;
+      case 'tab':changeTab(['gallery','ori','qa'].includes(data)?data:'proposals');break;
+      case 'prev-check':
+      case 'next-check':
+        qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
+        break;
+      case 'mark-pass':
+      case 'mark-fail':
+      case 'mark-skip':
+        setCheck(qa,QA_TESTS[qaCheckCursor].id,action.slice(5));
+        renderQaUI();
+        toast('Field result recorded locally: '+QA_TESTS[qaCheckCursor].label+'.');
+        break;
       case 'prev-prompt':
       case 'next-prompt':
         xrPromptCursor+=(action==='next-prompt'?1:-1);
@@ -600,6 +622,76 @@ function handleXRAction(action,data){
   }catch(error){toast(error.message);}
   refresh();
 }
+
+function renderQaUI(){
+  const summary=summarizeQA(qa);
+  const frames=summary.frame;
+  const stats=el('qa-stats');
+  stats.replaceChildren();
+  for(const [label,value] of [
+    ['VR sessions',summary.sessions],
+    ['Input / event observations',summary.eventCount],
+    ['Manual passes',summary.counts.pass],
+    ['Manual failures',summary.counts.fail],
+    ['JS frame avg (ms)',frames.meanMs===null?'—':frames.meanMs],
+    ['JS frame p95 (ms)',frames.p95Ms===null?'—':frames.p95Ms]
+  ]){
+    const tile=document.createElement('div');tile.className='qa-stat';
+    const key=document.createElement('span');key.textContent=label;
+    const number=document.createElement('strong');number.textContent=String(value);
+    tile.append(key,number);stats.append(tile);
+  }
+  const list=el('qa-tests');list.replaceChildren();
+  for(const test of QA_TESTS){
+    const item=document.createElement('div');item.className='qa-test';
+    const heading=document.createElement('strong');heading.textContent=test.label;
+    const detail=document.createElement('p');detail.textContent=test.detail;
+    const status=document.createElement('span');status.className='qa-outcome';
+    status.textContent='MANUAL · '+qa.checks[test.id].toUpperCase();
+    const controls=document.createElement('div');controls.className='qa-actions';
+    for(const [kind,title] of [['pass','Pass'],['fail','Fail'],['skip','Skip'],['untested','Clear']]){
+      const button=document.createElement('button');
+      button.className='button secondary'+(qa.checks[test.id]===kind?' selected':'');
+      button.textContent=title;
+      button.title=title+' '+test.label;
+      button.addEventListener('click',()=>{
+        setCheck(qa,test.id,kind);
+        renderQaUI();refreshXRConsole();
+      });
+      controls.append(button);
+    }
+    item.append(heading,detail,status,controls);list.append(item);
+  }
+}
+el('qa-export').addEventListener('click',()=>{
+  try{
+    downloadArchive('PhiFractalCity-quest-field-lab.json',exportQA(qa));
+    toast('Redacted QA report exported locally. No network upload.');
+  }catch(error){toast(error.message);}
+});
+el('qa-clear').addEventListener('click',()=>{
+  if(!window.confirm('Clear this page’s field observations and manual test results? Export the report first.'))return;
+  qa=makeQA();qaCheckCursor=0;
+  renderQaUI();refreshXRConsole();
+  toast('Field Lab reset. No world, habitat or workbench state changed.');
+});
+el('qa-storage-probe').addEventListener('click',()=>{
+  const key='phifractalcity:qa-probe:'+Date.now();
+  try{
+    if(!storage)throw new Error('Browser storage is unavailable');
+    storage.setItem(key,'ok');
+    if(storage.getItem(key)!=='ok')throw new Error('Storage read-back mismatch');
+    recordQA(qa,'storage-test-success');
+    toast('Browser storage read/write works now; reload persistence still needs manual testing.');
+  }catch(error){
+    recordQA(qa,'storage-test-fail');
+    toast('Browser storage check failed: '+error.message);
+  }finally{
+    try{storage?.removeItem(key);}catch{ /* blocked cleanup */ }
+  }
+  renderQaUI();refreshXRConsole();
+});
+renderQaUI();
 function emptyMessage(message){
   const node=document.createElement('div');node.className='empty-memory';node.textContent=message;return node;
 }
@@ -629,10 +721,20 @@ function openZone(id){
 function goDeeper(index){
   activeZone=null;
   selectedArtifact=null;
-  try{enterPocket(world,index);persist();rebuild();toast('Entered '+world.address+'. Procedural district restored.');}
+  try{
+    enterPocket(world,index);
+    if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
+    persist();rebuild();
+    toast('Entered '+world.address+'. Procedural district restored.');
+  }
   catch(error){toast(error.message);}
 }
-function goUp(){activeZone=null;selectedArtifact=null;returnPocket(world);persist();rebuild();toast('Returned to '+world.address+'.');}
+function goUp(){
+  activeZone=null;selectedArtifact=null;
+  returnPocket(world);
+  if(renderer.xr.isPresenting)recordQA(qa,'pocket-travel');
+  persist();rebuild();toast('Returned to '+world.address+'.');
+}
 function interact(hit){
   if(!hit)return;
   if(hit.kind==='portal'){goDeeper(hit.data);return;}
@@ -693,17 +795,23 @@ for(let i=0;i<2;i++){
   visitorRig.add(controller);
   if(i===0)controller.addEventListener('squeezestart',()=>{
     if(!renderer.xr.isPresenting)return;
+    recordQA(qa,'left-grip');
     const visible=xrConsole.toggle();
+    recordQA(qa,visible?'console-open':'console-close');
     if(visible)refreshXRConsole();
+    renderQaUI();
     toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
   });
   controller.addEventListener('selectstart',()=>{
+    if(renderer.xr.isPresenting)recordQA(qa,'controller-select');
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0,0,-1).transformDirection(controller.matrixWorld);
     interact(pick(raycaster));
   });
 }
 renderer.xr.addEventListener('sessionstart',()=>{
+  recordQA(qa,'xr-enter');
+  renderQaUI();
   orbit.enabled=false;
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
@@ -712,6 +820,8 @@ renderer.xr.addEventListener('sessionstart',()=>{
   toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
+  recordQA(qa,'xr-exit');
+  renderQaUI();
   xrConsole.hide();
   visitorRig.position.set(0,0,0);
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
@@ -744,8 +854,17 @@ function resize(){
 new ResizeObserver(resize).observe(container);
 window.addEventListener('resize',resize);
 function animate(){
-  const dt=Math.min(clock.getDelta(),.1);
-  if(!renderer.xr.isPresenting)orbit.update();
+  const rawDt=clock.getDelta();
+  const dt=Math.min(rawDt,.1);
+  if(renderer.xr.isPresenting){
+    recordFrame(qa,rawDt*1000);
+    const now=performance.now();
+    if(now-qaLastUpdatedAt>3500){
+      qaLastUpdatedAt=now;
+      if(xrTab==='qa'&&xrConsole.isVisible())refreshXRConsole();
+      renderQaUI();
+    }
+  }else orbit.update();
   moveVisitor(dt);
   const t=performance.now()/1000;
   if(crystal){crystal.rotation.y+=dt*.35;crystal.position.y=3.05+Math.sin(t*1.4)*.15;}
@@ -907,6 +1026,7 @@ async function requestOri(prompt,{fromXR=false}={}){
   const model=el('local-model-name').value.trim()||DEFAULT_LOCAL_MODEL;
   const requestedPocket=world.address;
   const transport=el('ori-transport').value;
+  if(fromXR)recordQA(qa,'model-attempt');
   modelBusy=true;
   latestModelReply=null;
   armedReview=null;
@@ -934,12 +1054,14 @@ async function requestOri(prompt,{fromXR=false}={}){
         })
       : await askLocalModel({prompt,model,context});
     latestModelReply={...result,address:requestedPocket};
+    if(fromXR)recordQA(qa,'model-success');
     xrDialogueStatus='Model '+latestModelReply.model+' replied · UNVERIFIED';
     el('model-reply').textContent=latestModelReply.text;
     displayModelStatus('Received · '+latestModelReply.endpoint+' · model '+latestModelReply.model+
       ' · pocket '+latestModelReply.address+' · unverified; not saved to world memory.');
     toast('Ori replied. Read the pages and review before staging.');
   }catch(error){
+    if(fromXR)recordQA(qa,'model-error');
     latestModelReply=null;
     xrDialogueStatus=String(error.message).slice(0,115);
     el('model-reply').textContent='No usable response.';
