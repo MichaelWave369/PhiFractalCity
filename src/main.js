@@ -58,6 +58,8 @@ let navigationMap = null;
 let routeOverlay = null;
 let activeRouteId = null;
 let routeSummary = null;
+let selectedRouteId = 'home';
+let lastBlockedRecord = -Infinity;
 let qaLastUpdatedAt = 0;
 let crystal, resident, board;
 let toastTimer, lastStep = performance.now();
@@ -423,6 +425,7 @@ function updateUI(){
   }
   renderHabitat();
   renderWorkbenchUI();
+  renderRouteUI();
   refreshXRConsole();
   el('stage-ori-proposal').disabled = !latestModelReply || modelBusy;
   const list=el('memory-list');list.replaceChildren();
@@ -533,6 +536,12 @@ function refreshXRConsole(){
     placement:placement&&current?.id===placement.artifactId?placement:null,
     armedText:armed?'Press again to confirm '+armed.action.toUpperCase():'',
     comfort,
+    route:(()=>{
+      const choices=routeDestinations(world.address);
+      const choice=choices.find(x=>x.id===selectedRouteId)||choices[0];
+      return {name:choice.name,active:activeRouteId===choice.id,
+        distance:routeSummary?.distance??null};
+    })(),
     qa:{
       ...summarizeQA(qa),
       checkIndex:qaCheckCursor,
@@ -564,6 +573,19 @@ function handleXRAction(action,data){
       case 'cycle-speed':updateComfort(cycleComfort(comfort,'speed'));break;
       case 'cycle-panel':updateComfort(cycleComfort(comfort,'panelDistance'));pendingConsoleDock=true;break;
       case 'recenter-panel':pendingConsoleDock=true;toast('Panel will be recentered to your current headset direction.');break;
+      case 'route-next':{
+        const choices=routeDestinations(world.address);
+        const at=choices.findIndex(x=>x.id===selectedRouteId);
+        selectedRouteId=choices[(at+1+choices.length)%choices.length].id;
+        clearRoutePreview({silent:true});
+        renderRouteUI();
+        toast('Destination selected: '+choices.find(x=>x.id===selectedRouteId).name);
+        break;
+      }
+      case 'route-toggle':
+        if(activeRouteId===selectedRouteId)clearRoutePreview();
+        else previewRoute();
+        break;
       case 'prev-check':
       case 'next-check':
         qaCheckCursor=(qaCheckCursor+(action==='next-check'?1:-1)+QA_TESTS.length)%QA_TESTS.length;
@@ -660,6 +682,105 @@ function handleXRAction(action,data){
 }
 
 
+
+function recordBlockedMovement(){
+  const now=performance.now();
+  if(now-lastBlockedRecord>1500){
+    lastBlockedRecord=now;
+    recordQA(qa,'collision-blocked');
+  }
+}
+function clearRouteOverlay(){
+  if(!routeOverlay)return;
+  districtRoot.remove(routeOverlay);
+  routeOverlay.traverse(obj=>{
+    obj.geometry?.dispose();
+    const mats=obj.material?(Array.isArray(obj.material)?obj.material:[obj.material]):[];
+    mats.forEach(m=>m.dispose());
+  });
+  routeOverlay=null;
+}
+function renderRouteUI(){
+  const select=el('route-destination');
+  const choices=routeDestinations(world.address);
+  if(!choices.some(x=>x.id===selectedRouteId))selectedRouteId=choices[0].id;
+  select.replaceChildren();
+  for(const item of choices){
+    const option=document.createElement('option');
+    option.value=item.id;option.textContent=item.name;
+    select.append(option);
+  }
+  select.value=selectedRouteId;
+  const active=Boolean(routeSummary&&activeRouteId===selectedRouteId);
+  el('route-clear').disabled=!active;
+  const status=el('route-status');
+  status.textContent=active
+    ?'Preview: '+routeSummary.distance.toFixed(1)+' m, '+routeSummary.waypoints.length+
+      ' points. Route generated from your position at request time.'
+    :'No active route. On desktop, the preview starts from the VR arrival point.';
+}
+function clearRoutePreview({silent=false}={}){
+  clearRouteOverlay();
+  activeRouteId=null;
+  routeSummary=null;
+  renderRouteUI();
+  if(!silent)toast('Route preview cleared. No saved world data changed.');
+}
+function visitorRouteOrigin(){
+  const pose=renderer.xr.isPresenting?xrHeadPose()?.pos:null;
+  return pose?{x:pose.x,z:pose.z}:{x:0,z:16};
+}
+function previewRoute({silent=false}={}){
+  clearRouteOverlay();
+  const choices=routeDestinations(world.address);
+  const choice=choices.find(x=>x.id===selectedRouteId)||choices[0];
+  selectedRouteId=choice.id;
+  const origin=visitorRouteOrigin();
+  const planned=planPath(navigationMap,origin,{x:choice.x,z:choice.z});
+  if(!planned){
+    activeRouteId=null;routeSummary=null;
+    renderRouteUI();
+    if(!silent)toast('No safe route found. Move to an open road and try again.');
+    recordQA(qa,'route-unreachable');
+    return false;
+  }
+  activeRouteId=choice.id;
+  routeSummary=planned;
+  const overlay=new THREE.Group();
+  const points=planned.waypoints.map(p=>new THREE.Vector3(p.x,.18,p.z));
+  const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({color:0x5bebc7,transparent:true,opacity:.9,depthTest:true}));
+  overlay.add(line);
+  const finish=planned.waypoints.at(-1);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.65,.82,32),
+    new THREE.MeshBasicMaterial({color:0x7bead3,side:THREE.DoubleSide,transparent:true,opacity:.9}));
+  ring.rotation.x=-Math.PI/2;
+  ring.position.set(finish.x,.22,finish.z);
+  overlay.add(ring);
+  for(const p of planned.waypoints.slice(1,-1)){
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(.14,8,8),
+      new THREE.MeshBasicMaterial({color:0x8fffe9}));
+    orb.position.set(p.x,.23,p.z);overlay.add(orb);
+  }
+  routeOverlay=overlay;districtRoot.add(routeOverlay);
+  renderRouteUI();
+  recordQA(qa,'route-preview');
+  if(!silent)toast('Walkable path to '+choice.name+': '+planned.distance.toFixed(1)+' m. Preview only.');
+  return true;
+}
+el('route-destination').addEventListener('change',()=>{
+  selectedRouteId=el('route-destination').value;
+  clearRoutePreview({silent:true});
+  refreshXRConsole();
+});
+el('route-preview').addEventListener('click',()=>{
+  previewRoute();
+  refreshXRConsole();
+});
+el('route-clear').addEventListener('click',()=>{
+  clearRoutePreview();
+  refreshXRConsole();
+});
 function renderComfortUI(){
   el('comfort-movement').value=comfort.locomotion;
   el('comfort-turn').value=comfort.turn;
