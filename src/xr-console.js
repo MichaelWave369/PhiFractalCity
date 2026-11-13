@@ -76,12 +76,14 @@ export function createXRConsole(THREE, rig) {
     rectangle(1.02,1.48,0,0,-.01,palette.bg);
     label('Φ CITY / XR CONSOLE',-.47,.655,.92,.105,{size:37,color:'#82e0da'});
     label('POCKET '+state.pocket,-.47,.565,.92,.075,{size:30,color:palette.soft});
-    button('PROPOSALS','tab','proposals',-.316,.454,.30,.105,
+    button('PROPOSALS','tab','proposals',-.354,.454,.225,.105,
       state.tab==='proposals'?palette.accent:palette.muted);
-    button('EXHIBITS','tab','gallery',0,.454,.30,.105,
+    button('EXHIBITS','tab','gallery',-.118,.454,.225,.105,
       state.tab==='gallery'?palette.accent:palette.muted);
-    button('TALK TO ORI','tab','ori',.316,.454,.30,.105,
+    button('TALK','tab','ori',.118,.454,.225,.105,
       state.tab==='ori'?palette.accent:palette.muted);
+    button('FIELD LAB','tab','qa',.354,.454,.225,.105,
+      state.tab==='qa'?palette.accent:palette.muted);
     if(state.tab==='proposals'){
       const item=state.proposal;
       label('PENDING REVIEW',-.47,.346,.91,.073,{size:33,color:'#a6d9ff'});
@@ -139,6 +141,37 @@ export function createXRConsole(THREE, rig) {
       button('NEXT PAGE','next-reply',null,.238,-.49,.455,.082);
       button(dialogue.armedText||'STAGE IDEA (CONFIRM TWICE)','stage-reply',null,0,-.574,.93,.079,
         palette.accent);
+    }else if(state.tab==='qa'){
+      const qa=state.qa||{};
+      const check=qa.check;
+      label('QUEST FIELD LAB / LOCAL ONLY',-.47,.35,.91,.075,
+        {size:30,color:'#84e2d6'});
+      label('TEST '+(qa.checkIndex+1)+' / '+(qa.checkCount||0)+
+        ' · '+(check?.status||'UNTESTED').toUpperCase(),
+        -.47,.265,.91,.075,{size:29,color:'#b5cafa'});
+      label(check?.label||'No active test',-.47,.17,.91,.083,
+        {size:32,color:'#dcecff'});
+      label(check?.detail||'Review the checklist in the browser.',-.47,.073,.91,.111,
+        {size:27,lines:2,color:'#a9c5e9'});
+      button('PREV TEST','prev-check',null,-.238,-.029,.455,.083);
+      button('NEXT TEST','next-check',null,.238,-.029,.455,.083);
+      button('PASS','mark-pass',null,-.316,-.144,.296,.094,palette.accent);
+      button('FAIL','mark-fail',null,0,-.144,.296,.094,palette.danger);
+      button('SKIP','mark-skip',null,.316,-.144,.296,.094,palette.muted);
+      const counts=qa.counts||{};
+      label('PASS '+(counts.pass||0)+'   FAIL '+(counts.fail||0)+
+        '   SKIP '+(counts.skip||0),-.47,-.246,.91,.075,
+        {size:28,color:'#a5c2e1'});
+      label('XR SESSIONS: '+(qa.sessions||0)+'   EVENTS: '+(qa.eventCount||0),
+        -.47,-.338,.91,.07,{size:28,color:'#a5c2e1'});
+      const frame=qa.frame||{};
+      label(frame.samples?'FRAME AVG '+frame.meanMs+'ms · P95 '+frame.p95Ms+'ms':
+        'NO XR FRAME SAMPLES YET',-.47,-.43,.91,.075,
+        {size:25,color:'#a5c2e1'});
+      label('JS FRAME INTERVALS ≠ COMPOSITOR FPS',-.47,-.516,.91,.065,
+        {size:25,color:'#e6bd87'});
+      label('EXIT VR TO EXPORT REDACTED REPORT',-.47,-.595,.91,.065,
+        {size:26,color:'#a9c5e9'});
     }
     button('CLOSE · LEFT GRIP TO REOPEN','close',null,0,-.667,.93,.066,palette.muted);
     label('ONE-SHOT REQUESTS · NO AUTO-PUBLISH',-.47,-.722,.92,.03,{size:20,color:palette.soft});
