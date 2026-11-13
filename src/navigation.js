@@ -28,7 +28,7 @@ export function createNavigationMap(district,placements=[]){
     ...district.buildings.map(b=>{
       if(!b||!Number.isFinite(b.x)||!Number.isFinite(b.z))throw new Error('Invalid building');
       // Includes roof overhang, allowing space around the geometric walls.
-      return rect('building:'+b.id,b.x,b.z,1.95,1.95);
+      return rect('building:'+b.id,b.x,b.z,1.45,1.45);
     })
   ];
   if(district.address==='0'){
