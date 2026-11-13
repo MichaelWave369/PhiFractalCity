@@ -125,3 +125,9 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 .qa-actions .button.selected{border-color:#87bbd9;background:#304c65;color:#fff}
 .qa-panel .button-row{margin-top:14px}
 @media(max-width:640px){.qa-tests{max-height:480px}}
+
+/* R0.8: visitor-specific comfort controls, independent of agent memory */
+#comfort-panel{background:linear-gradient(135deg,#182b40,#111b2f)}
+#comfort-panel select{margin-bottom:7px}
+#comfort-panel .button-row{margin-top:14px}
+#comfort-panel .button:disabled{opacity:.4;cursor:not-allowed}
