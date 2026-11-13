@@ -4,7 +4,7 @@
 
 A local-first, recursive, agent-native city that a human collaborator can visit through a browser or WebXR. Districts are generated from deterministic pocket addresses; memories and activity records persist independently of the renderer.
 
-> **Status:** Rung 0.5 candidate. Rungs 0.1–0.4 and the Pages deployment repair are merged and published. An opt-in, authenticated **HTTPS LAN bridge to PC Ollama** is in PR review. Quest 3 hardware acceptance, TLS trust, and cross-device inference are not verified.
+> **Status:** Rung 0.6 candidate. Rungs 0.1–0.5 have merged and deployed. An experimental **VR-native Ori conversation panel** with preset questions and paged answers is in PR review. Actual Quest 3 hardware, trusted TLS and cross-device model connectivity are not yet verified.
 
 ## Vision
 
@@ -42,13 +42,21 @@ The app has **three independent JSON backups**: world, habitat, and workbench. A
 
 See [R0.4 XR Workshop Guide](docs/VR_WORKSHOP_R04.md) for input controls, trust boundaries, and a manual test checklist.
 
-## Rung 0.5 candidate: Paired local intelligence bridge
+## Rung 0.5: Paired local intelligence bridge
 
 An optional **operator-started HTTPS Node.js bridge** can forward one user-requested chat query to local PC Ollama with a random per-start bearer pairing token, exact browser-origin CORS, loopback-only upstream and bounded public pocket context. Its target is not cloud-hosted, and the browser does not save the pairing token.
 
 **This is not a verified Quest-to-PC solution yet.** Real use requires a certificate trusted on the headset, browser Local Network Access permission, LAN reachability and manual hardware testing. We do not enable wildcard CORS or expose Ollama to the LAN. See [R0.5 Bridge Setup and Security](docs/BRIDGE_R05.md).
 
 The model is still a one-shot text assistant, not an unattended autonomous agent. VR-native typing, two-way speech and shared multiuser state are not included.
+
+## Rung 0.6 candidate: Talk to Ori in immersive VR
+
+The floating XR console now includes **Talk to Ori** alongside Proposals and Exhibits. Choose among four fixed, visitor-triggered prompts and view an unverified model response across readable pages. A suggestion can be staged only with **two explicit selections**, and still needs separate workshop approval before publishing a concept.
+
+The Quest must first pair with the **R0.5 HTTPS bridge using the browser's 2D interface**. VR preset prompts cannot secretly connect to desktop Ollama or read private resident memories. This is not microphone chat, a continuously active agent, or verified Quest hardware support.
+
+See [R0.6 XR Conversation & Quest Acceptance Guide](docs/XR_DIALOGUE_R06.md).
 
 ## Run locally
 
