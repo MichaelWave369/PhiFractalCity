@@ -956,14 +956,37 @@ for(let i=0;i<2;i++){
   );
   controller.add(rayLine);
   visitorRig.add(controller);
-  if(i===0)controller.addEventListener('squeezestart',()=>{
+  controller.addEventListener('connected',event=>{
+    controller.userData.handedness=event.data?.handedness||'unknown';
+    if(controller.userData.handedness==='right')xrRightController=controller;
+  });
+  controller.addEventListener('disconnected',()=>{
+    if(xrRightController===controller){
+      xrRightController=null;xrTeleportHeld=false;
+      xrTeleportTarget=null;teleportMarker.visible=false;
+    }
+    controller.userData.handedness='unknown';
+  });
+  controller.addEventListener('squeezestart',()=>{
     if(!renderer.xr.isPresenting)return;
-    recordQA(qa,'left-grip');
-    const visible=xrConsole.toggle();
-    recordQA(qa,visible?'console-open':'console-close');
-    if(visible)refreshXRConsole();
-    renderQaUI();
-    toast(visible?'XR workshop console opened.':'XR workshop console hidden.');
+    if(controller.userData.handedness==='left'){
+      recordQA(qa,'left-grip');
+      const visible=xrConsole.toggle();
+      recordQA(qa,visible?'console-open':'console-close');
+      if(visible){pendingConsoleDock=true;refreshXRConsole();}
+      renderQaUI();
+      toast(visible?'XR console reopened.':'XR console hidden.');
+    }else if(controller.userData.handedness==='right'){
+      xrRightController=controller;xrTeleportHeld=true;
+      recordQA(qa,'teleport-aim');
+      refreshTeleportTarget();
+      toast('Aim at a clear stretch of ground, then release right grip to teleport.');
+    }
+  });
+  controller.addEventListener('squeezeend',()=>{
+    if(renderer.xr.isPresenting&&controller.userData.handedness==='right'&&xrTeleportHeld){
+      commitTeleport();
+    }
   });
   controller.addEventListener('selectstart',()=>{
     if(renderer.xr.isPresenting)recordQA(qa,'controller-select');
@@ -974,40 +997,32 @@ for(let i=0;i<2;i++){
 }
 renderer.xr.addEventListener('sessionstart',()=>{
   recordQA(qa,'xr-enter');
-  renderQaUI();
   orbit.enabled=false;
   camera.userData.desktopPosition=camera.position.clone();
   visitorRig.position.set(0,0,16);
+  visitorRig.rotation.y=0;
   camera.position.set(0,0,0);
-  xrConsole.show();refreshXRConsole();
-  toast('WebXR session started. Point and trigger to interact. Use left grip to toggle the workshop.');
+  xrTurnLatched=false;
+  xrTeleportHeld=false;
+  teleportMarker.visible=false;
+  pendingConsoleDock=true;
+  xrConsole.show();
+  refreshXRConsole();renderQaUI();renderComfortUI();
+  toast('VR ready. Left grip opens console; right grip teleports. MOVE tab adjusts comfort.');
 });
 renderer.xr.addEventListener('sessionend',()=>{
   recordQA(qa,'xr-exit');
-  renderQaUI();
   xrConsole.hide();
+  xrTeleportHeld=false;xrTeleportTarget=null;
+  teleportMarker.visible=false;
+  pendingConsoleDock=false;xrTurnLatched=false;
   visitorRig.position.set(0,0,0);
+  visitorRig.rotation.y=0;
   camera.position.copy(camera.userData.desktopPosition||new THREE.Vector3(19,20,27));
-  orbit.enabled=true;orbit.target.set(0,2,0);orbit.update();
+  orbit.enabled=true;
+  orbit.target.set(0,2,0);orbit.update();
+  renderQaUI();renderComfortUI();
 });
-function moveVisitor(dt){
-  if(!renderer.xr.isPresenting)return;
-  const session=renderer.xr.getSession();
-  if(!session)return;
-  const source=[...session.inputSources].find(s=>s.handedness==='left'&&s.gamepad);
-  if(!source)return;
-  const axes=source.gamepad.axes;
-  const x=axes.length>=4?axes[2]:axes[0],y=axes.length>=4?axes[3]:axes[1];
-  if(Math.hypot(x||0,y||0)<.18)return;
-  const heading=new THREE.Vector3();
-  renderer.xr.getCamera(camera).getWorldDirection(heading);
-  heading.y=0;heading.normalize();
-  const right=new THREE.Vector3().crossVectors(heading,new THREE.Vector3(0,1,0)).normalize();
-  visitorRig.position.addScaledVector(right,(x||0)*dt*3.5);
-  visitorRig.position.addScaledVector(heading,-(y||0)*dt*3.5);
-  visitorRig.position.x=THREE.MathUtils.clamp(visitorRig.position.x,-48,48);
-  visitorRig.position.z=THREE.MathUtils.clamp(visitorRig.position.z,-48,48);
-}
 function resize(){
   const width=container.clientWidth,height=Math.max(1,container.clientHeight);
   camera.aspect=width/height;
@@ -1028,7 +1043,7 @@ function animate(){
       renderQaUI();
     }
   }else orbit.update();
-  moveVisitor(dt);
+  updateXRComfort(dt);
   const t=performance.now()/1000;
   if(crystal){crystal.rotation.y+=dt*.35;crystal.position.y=3.05+Math.sin(t*1.4)*.15;}
   if(resident){resident.rotation.y+=dt*.4;resident.position.y=2.6+Math.sin(t*1.7)*.22;}
