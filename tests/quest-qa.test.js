@@ -56,8 +56,9 @@ test('the report never includes memory, browser metadata, bridge secret, address
   qa.userAgent='browser-fingerprint';
   qa.bridgeUrl='https://192.168.1.1:8765/v1/chat';
   qa.modelReply='This is a confidential model answer';
-  qa.latestEvent='Secret accidentally injected as a status';
   recordQA(qa,'model-attempt');
+  // Simulate unexpected status mutation after the legitimate event.
+  qa.latestEvent='Secret accidentally injected as a status';
   const text=exportQA(qa);
   for(const secret of [qa.token,qa.privateNotes[0],qa.userAgent,qa.bridgeUrl,qa.modelReply]){
     assert.equal(text.includes(secret),false);
